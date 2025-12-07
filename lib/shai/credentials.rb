@@ -16,7 +16,7 @@ module Shai
     end
 
     def expired?
-      return true unless expires_at
+      return false unless expires_at
 
       Time.parse(expires_at) < Time.now
     end
