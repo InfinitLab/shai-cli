@@ -1,0 +1,6 @@
+plugins:
+  - standard-performance
+
+ignore:
+  - "vendor/**/*"
+  - "spec/cassettes/**/*"

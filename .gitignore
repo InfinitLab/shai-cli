@@ -1,0 +1,30 @@
+# Bundler
+/.bundle/
+/vendor/bundle/
+Gemfile.lock
+
+# Gem build artifacts
+*.gem
+/pkg/
+
+# Coverage
+/coverage/
+
+# RSpec
+/spec/examples.txt
+
+# VCR cassettes (optional - may want to track these)
+# /spec/cassettes/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+/tmp/
