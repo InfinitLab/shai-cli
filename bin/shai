@@ -1,6 +1,23 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+# Load environment variables from .env files (development only)
+begin
+  require "dotenv"
+
+  env = ENV.fetch("SHAI_ENV", "development")
+  env_files = [
+    ".env.#{env}.local",
+    ".env.#{env}",
+    ".env.local",
+    ".env"
+  ].select { |f| File.exist?(f) }
+
+  Dotenv.load(*env_files) if env_files.any?
+rescue LoadError
+  # dotenv not available (production gem install), skip
+end
+
 require_relative "../lib/shai"
 
 Shai::CLI.start(ARGV)

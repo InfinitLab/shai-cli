@@ -28,3 +28,11 @@ Thumbs.db
 
 # Temporary files
 /tmp/
+
+# Environment files (keep .env.example)
+.env
+.env.local
+.env.*.local
+
+# Local credentials (development)
+/.config/

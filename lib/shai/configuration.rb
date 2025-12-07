@@ -6,7 +6,7 @@ module Shai
 
     def initialize
       @api_url = ENV.fetch("SHAI_API_URL", "https://shai.dev")
-      @config_dir = ENV.fetch("SHAI_CONFIG_DIR", default_config_dir)
+      @config_dir = expand_path(ENV.fetch("SHAI_CONFIG_DIR", default_config_dir))
       @token = ENV["SHAI_TOKEN"]
     end
 
@@ -26,6 +26,10 @@ module Shai
       else
         File.join(Dir.home, ".config", "shai")
       end
+    end
+
+    def expand_path(path)
+      File.expand_path(path)
     end
   end
 end

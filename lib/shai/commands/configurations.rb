@@ -16,7 +16,7 @@ module Shai
                 api.list_configurations
               end
 
-              configs = response["configurations"]
+              configs = response.is_a?(Array) ? response : response["configurations"]
 
               if configs.empty?
                 ui.info("You don't have any configurations yet.")
@@ -51,7 +51,7 @@ module Shai
                 api.search_configurations(query: query, tags: tags)
               end
 
-              configs = response["configurations"]
+              configs = response.is_a?(Array) ? response : response["configurations"]
               search_term = query ? "\"#{query}\"" : "tags: #{tags.join(", ")}"
 
               if configs.empty?
@@ -147,6 +147,89 @@ module Shai
 
               ui.blank
               ui.success("Installed #{created_count} items")
+            rescue NotFoundError
+              ui.error("Configuration '#{display_name}' not found.")
+              exit EXIT_NOT_FOUND
+            rescue PermissionDeniedError
+              ui.error("You don't have permission to access '#{display_name}'.")
+              exit EXIT_PERMISSION_DENIED
+            rescue NetworkError => e
+              ui.error(e.message)
+              exit EXIT_NETWORK_ERROR
+            end
+          end
+
+          desc "uninstall CONFIGURATION", "Remove an installed configuration from local project"
+          option :dry_run, type: :boolean, default: false, desc: "Show what would be removed"
+          option :path, type: :string, default: ".", desc: "Path where configuration is installed"
+          def uninstall(configuration)
+            require_auth!
+
+            owner, slug = parse_configuration_name(configuration)
+            display_name = owner ? "#{owner}/#{slug}" : slug
+
+            begin
+              response = ui.spinner("Fetching #{display_name}...") do
+                api.get_tree(slug)
+              end
+
+              tree = response.is_a?(Array) ? response : response["tree"]
+              base_path = File.expand_path(options[:path])
+
+              # Find files that exist locally
+              files_to_remove = []
+              folders_to_remove = []
+
+              tree.each do |node|
+                local_path = File.join(base_path, node["path"])
+
+                if node["kind"] == "folder"
+                  folders_to_remove << node["path"] if Dir.exist?(local_path)
+                elsif File.exist?(local_path)
+                  files_to_remove << node["path"]
+                end
+              end
+
+              if files_to_remove.empty? && folders_to_remove.empty?
+                ui.info("No files from '#{display_name}' found in #{base_path}")
+                return
+              end
+
+              if options[:dry_run]
+                ui.header("Would remove:")
+                files_to_remove.each { |path| ui.display_file_operation(:would_create, path) }
+                folders_to_remove.sort.reverse_each { |path| ui.display_file_operation(:would_create, path + "/") }
+                ui.blank
+                ui.info("No changes made (dry run)")
+                return
+              end
+
+              unless ui.yes?("Remove #{files_to_remove.length} files and #{folders_to_remove.length} folders from '#{display_name}'?")
+                ui.info("Uninstall cancelled")
+                return
+              end
+
+              ui.header("Uninstalling #{display_name}...")
+              ui.blank
+
+              # Remove files first
+              files_to_remove.each do |path|
+                local_path = File.join(base_path, path)
+                File.delete(local_path)
+                ui.display_file_operation(:deleted, path)
+              end
+
+              # Remove folders (deepest first)
+              folders_to_remove.sort.reverse_each do |path|
+                local_path = File.join(base_path, path)
+                if Dir.exist?(local_path) && Dir.empty?(local_path)
+                  Dir.rmdir(local_path)
+                  ui.display_file_operation(:deleted, path + "/")
+                end
+              end
+
+              ui.blank
+              ui.success("Uninstalled #{display_name}")
             rescue NotFoundError
               ui.error("Configuration '#{display_name}' not found.")
               exit EXIT_NOT_FOUND

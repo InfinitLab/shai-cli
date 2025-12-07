@@ -9,6 +9,7 @@ group :development, :test do
   gem "standard", "~> 1.40"
   gem "rubocop-rake", require: false
   gem "rubocop-rspec", require: false
+  gem "dotenv", "~> 3.1"
 end
 
 group :test do
