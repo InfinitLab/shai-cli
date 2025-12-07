@@ -198,6 +198,117 @@ module Shai
             end
           end
 
+          desc "pull", "Pull remote changes to local"
+          option :dry_run, type: :boolean, default: false, desc: "Show what would be pulled"
+          option :force, type: :boolean, default: false, aliases: "-f", desc: "Overwrite local files without prompting"
+          def pull
+            require_auth!
+
+            shairc = load_shairc
+            slug = shairc["slug"]
+
+            display_name = "#{credentials.username}/#{slug}"
+
+            begin
+              remote_tree = ui.spinner("Fetching remote state...") do
+                api.get_tree(slug)["tree"]
+              end
+
+              local_tree = build_local_tree(shairc)
+
+              # Build lookup maps
+              remote_files = remote_tree.select { |n| n["kind"] == "file" }
+                .each_with_object({}) { |n, h| h[n["path"]] = n["content"] }
+              local_files = local_tree.select { |n| n[:kind] == "file" }
+                .each_with_object({}) { |n, h| h[n[:path]] = n[:content] }
+
+              # Categorize changes
+              to_create = []
+              to_update = []
+
+              remote_files.each do |path, content|
+                if local_files.key?(path)
+                  to_update << {path: path, content: content} if local_files[path] != content
+                else
+                  to_create << {path: path, content: content}
+                end
+              end
+
+              if to_create.empty? && to_update.empty?
+                ui.info("Already up to date with #{display_name}")
+                return
+              end
+
+              # Dry run mode
+              if options[:dry_run]
+                ui.header("Would pull from #{display_name}:")
+                ui.blank
+                to_create.each { |f| ui.display_file_operation(:would_create, f[:path]) }
+                to_update.each { |f| ui.display_file_operation(:would_update, f[:path]) }
+                ui.blank
+                ui.info("No changes made (dry run)")
+                return
+              end
+
+              # Check for conflicts (files that would be overwritten)
+              unless options[:force] || to_update.empty?
+                ui.warning("The following local files will be overwritten:")
+                to_update.each { |f| ui.indent(f[:path]) }
+                ui.blank
+
+                unless ui.yes?("Continue and overwrite these files?")
+                  ui.info("Pull cancelled.")
+                  return
+                end
+              end
+
+              # Apply changes
+              ui.header("Pulling from #{display_name}...")
+              ui.blank
+
+              # Create necessary folders
+              all_folders = Set.new
+              (to_create + to_update).each do |file|
+                parts = File.dirname(file[:path]).split("/")
+                parts.each_with_index do |_, i|
+                  folder_path = parts[0..i].join("/")
+                  all_folders << folder_path unless folder_path == "."
+                end
+              end
+
+              all_folders.sort.each do |folder|
+                unless Dir.exist?(folder)
+                  FileUtils.mkdir_p(folder)
+                  ui.display_file_operation(:created, folder)
+                end
+              end
+
+              # Create new files
+              to_create.each do |file|
+                File.write(file[:path], file[:content])
+                ui.display_file_operation(:created, file[:path])
+              end
+
+              # Update existing files
+              to_update.each do |file|
+                File.write(file[:path], file[:content])
+                ui.display_file_operation(:updated, file[:path])
+              end
+
+              ui.blank
+              ui.success("Pulled #{to_create.length + to_update.length} items from #{display_name}")
+            rescue NotFoundError
+              ui.error("Configuration '#{slug}' not found on remote.")
+              exit EXIT_NOT_FOUND
+            rescue PermissionDeniedError
+              ui.error("You don't have permission to access '#{display_name}'.")
+              exit EXIT_PERMISSION_DENIED
+            rescue NetworkError => e
+              ui.error(e.message)
+              exit EXIT_NETWORK_ERROR
+            end
+          end
+
           desc "diff", "Show diff between local and remote"
           def diff
             require_auth!

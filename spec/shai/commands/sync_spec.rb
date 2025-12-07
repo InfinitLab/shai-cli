@@ -329,4 +329,208 @@ RSpec.describe "Sync commands" do
       end
     end
   end
+
+  describe "#pull" do
+    context "when no .shairc file exists" do
+      before do
+        allow(File).to receive(:exist?).with(".shairc").and_return(false)
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/No .shairc file found/)
+        expect { cli.pull }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when already up to date" do
+      let(:remote_tree) do
+        [
+          {"kind" => "file", "path" => ".claude/config.md", "content" => "# Config"}
+        ]
+      end
+
+      before do
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([".claude/config.md"])
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/config.md").and_return("# Config")
+        allow(File).to receive(:dirname).and_call_original
+      end
+
+      it "displays up to date message" do
+        expect(ui).to receive(:info).with(/Already up to date/)
+        cli.pull
+      end
+    end
+
+    context "with dry-run option and remote changes" do
+      let(:remote_tree) do
+        [
+          {"kind" => "folder", "path" => ".claude"},
+          {"kind" => "file", "path" => ".claude/config.md", "content" => "# Updated Content"},
+          {"kind" => "file", "path" => ".claude/new.md", "content" => "# New File"}
+        ]
+      end
+
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: true, force: false})
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([".claude/config.md"])
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/config.md").and_return("# Old Content")
+        allow(File).to receive(:dirname).and_call_original
+      end
+
+      it "shows what would be pulled without making changes" do
+        expect(ui).to receive(:header).with(/Would pull/)
+        expect(ui).to receive(:display_file_operation).with(:would_create, ".claude/new.md")
+        expect(ui).to receive(:display_file_operation).with(:would_update, ".claude/config.md")
+        expect(ui).to receive(:info).with(/No changes made/)
+        cli.pull
+      end
+    end
+
+    context "when user confirms update" do
+      let(:remote_tree) do
+        [
+          {"kind" => "folder", "path" => ".claude"},
+          {"kind" => "file", "path" => ".claude/config.md", "content" => "# Updated Content"}
+        ]
+      end
+
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false})
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([".claude/config.md"])
+        allow(Dir).to receive(:exist?).and_return(true)
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/config.md").and_return("# Old Content")
+        allow(File).to receive(:dirname).and_call_original
+        allow(File).to receive(:write)
+        allow(ui).to receive(:yes?).and_return(true)
+      end
+
+      it "updates local files" do
+        expect(File).to receive(:write).with(".claude/config.md", "# Updated Content")
+        expect(ui).to receive(:success).with(/Pulled/)
+        cli.pull
+      end
+    end
+
+    context "when user cancels update" do
+      let(:remote_tree) do
+        [
+          {"kind" => "file", "path" => ".claude/config.md", "content" => "# Updated Content"}
+        ]
+      end
+
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false})
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([".claude/config.md"])
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/config.md").and_return("# Old Content")
+        allow(File).to receive(:dirname).and_call_original
+        allow(ui).to receive(:yes?).and_return(false)
+      end
+
+      it "displays cancelled message" do
+        expect(File).not_to receive(:write)
+        expect(ui).to receive(:info).with(/cancelled/)
+        cli.pull
+      end
+    end
+
+    context "with force option" do
+      let(:remote_tree) do
+        [
+          {"kind" => "folder", "path" => ".claude"},
+          {"kind" => "file", "path" => ".claude/config.md", "content" => "# Updated Content"}
+        ]
+      end
+
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: true})
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([".claude/config.md"])
+        allow(Dir).to receive(:exist?).and_return(true)
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/config.md").and_return("# Old Content")
+        allow(File).to receive(:dirname).and_call_original
+        allow(File).to receive(:write)
+      end
+
+      it "overwrites files without prompting" do
+        expect(ui).not_to receive(:yes?)
+        expect(File).to receive(:write).with(".claude/config.md", "# Updated Content")
+        expect(ui).to receive(:success).with(/Pulled/)
+        cli.pull
+      end
+    end
+
+    context "when configuration not found" do
+      before do
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "nonexistent"})
+        allow(api).to receive(:get_tree).and_raise(Shai::NotFoundError, "Not found")
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/not found/)
+        expect { cli.pull }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when network error occurs" do
+      before do
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config"})
+        allow(api).to receive(:get_tree).and_raise(Shai::NetworkError, "Connection failed")
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/Connection failed/)
+        expect { cli.pull }.to raise_error(SystemExit)
+      end
+    end
+
+    context "with new files to create" do
+      let(:remote_tree) do
+        [
+          {"kind" => "folder", "path" => ".claude"},
+          {"kind" => "file", "path" => ".claude/new.md", "content" => "# New File"}
+        ]
+      end
+
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false})
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([])
+        allow(Dir).to receive(:exist?).and_return(false)
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:dirname).and_call_original
+        allow(File).to receive(:write)
+        allow(FileUtils).to receive(:mkdir_p)
+      end
+
+      it "creates new files and folders" do
+        expect(FileUtils).to receive(:mkdir_p).with(".claude")
+        expect(File).to receive(:write).with(".claude/new.md", "# New File")
+        expect(ui).to receive(:success).with(/Pulled/)
+        cli.pull
+      end
+    end
+  end
 end

@@ -158,12 +158,16 @@ module Shai
         puts "  #{green("Created")} #{path}"
       when :modified
         puts "  #{yellow("Modified")} #{path}"
+      when :updated
+        puts "  #{yellow("Updated")} #{path}"
       when :deleted
         puts "  #{red("Deleted")} #{path}"
       when :uploaded
         puts "  #{cyan("Uploading")} #{path}"
       when :would_create
         puts "  #{path}"
+      when :would_update
+        puts "  #{yellow("~")} #{path}"
       when :conflict
         puts "  #{red(path)}"
       end
