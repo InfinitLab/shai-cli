@@ -138,6 +138,98 @@ RSpec.describe "Configurations commands" do
     end
   end
 
+  describe "#search" do
+    context "with tag filtering" do
+      let(:configs) do
+        [{"name" => "Tagged Config", "slug" => "tagged-config"}]
+      end
+
+      before do
+        allow(cli).to receive(:options).and_return({tag: ["claude"]})
+        allow(api).to receive(:search_configurations).with(query: nil, tags: ["claude"]).and_return(configs)
+      end
+
+      it "searches by tags" do
+        expect(ui).to receive(:header).with(/Search results/)
+        cli.search
+      end
+    end
+
+    context "when network error occurs" do
+      before do
+        allow(api).to receive(:search_configurations).and_raise(Shai::NetworkError, "Connection failed")
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/Connection failed/)
+        expect { cli.search("query") }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe "#list" do
+    context "when network error occurs" do
+      before do
+        allow(api).to receive(:list_configurations).and_raise(Shai::NetworkError, "Connection failed")
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/Connection failed/)
+        expect { cli.list }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe "#install" do
+    let(:tree) do
+      [
+        {"kind" => "folder", "path" => ".claude"},
+        {"kind" => "file", "path" => ".claude/settings.json", "content" => "{}"}
+      ]
+    end
+
+    context "with force option and existing files" do
+      before do
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
+        allow(cli).to receive(:options).and_return({dry_run: false, force: true, path: "/tmp/test"})
+        allow(File).to receive(:exist?).and_return(true)
+        allow(FileUtils).to receive(:mkdir_p)
+        allow(File).to receive(:write)
+      end
+
+      it "overwrites files without prompting" do
+        expect(ui).not_to receive(:select)
+        expect(FileUtils).to receive(:mkdir_p).at_least(:once)
+        expect(ui).to receive(:success).with(/Installed/)
+        cli.install("my-config")
+      end
+    end
+
+    context "with permission denied" do
+      before do
+        allow(api).to receive(:get_tree).with("private-config").and_raise(Shai::PermissionDeniedError, "Access denied")
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "."})
+      end
+
+      it "displays permission error" do
+        expect(ui).to receive(:error).with(/permission/)
+        expect { cli.install("private-config") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "with owner/slug format" do
+      before do
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
+        allow(cli).to receive(:options).and_return({dry_run: true, force: false, path: "."})
+      end
+
+      it "parses owner/slug format" do
+        expect(ui).to receive(:header).with(/Would install/)
+        cli.install("anthropic/my-config")
+      end
+    end
+  end
+
   describe "#uninstall" do
     let(:tree) do
       [
@@ -161,6 +253,64 @@ RSpec.describe "Configurations commands" do
         expect(ui).to receive(:header).with(/Would remove/)
         expect(ui).to receive(:info).with(/No changes made/)
         cli.uninstall("my-config")
+      end
+    end
+
+    context "when user confirms removal" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, path: "/tmp/test"})
+        allow(File).to receive(:exist?).and_return(true)
+        allow(Dir).to receive(:exist?).and_return(true)
+        allow(Dir).to receive(:empty?).and_return(true)
+        allow(File).to receive(:delete)
+        allow(Dir).to receive(:rmdir)
+        allow(ui).to receive(:yes?).and_return(true)
+      end
+
+      it "removes files and folders" do
+        expect(File).to receive(:delete).at_least(:once)
+        expect(ui).to receive(:success).with(/Uninstalled/)
+        cli.uninstall("my-config")
+      end
+    end
+
+    context "when user cancels removal" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, path: "/tmp/test"})
+        allow(File).to receive(:exist?).and_return(true)
+        allow(Dir).to receive(:exist?).and_return(true)
+        allow(ui).to receive(:yes?).and_return(false)
+      end
+
+      it "displays cancelled message" do
+        expect(File).not_to receive(:delete)
+        expect(ui).to receive(:info).with(/cancelled/)
+        cli.uninstall("my-config")
+      end
+    end
+
+    context "when no files found locally" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, path: "/tmp/empty"})
+        allow(File).to receive(:exist?).and_return(false)
+        allow(Dir).to receive(:exist?).and_return(false)
+      end
+
+      it "displays no files message" do
+        expect(ui).to receive(:info).with(/No files/)
+        cli.uninstall("my-config")
+      end
+    end
+
+    context "when configuration not found" do
+      before do
+        allow(api).to receive(:get_tree).with("nonexistent").and_raise(Shai::NotFoundError, "Not found")
+        allow(cli).to receive(:options).and_return({dry_run: false, path: "."})
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/not found/)
+        expect { cli.uninstall("nonexistent") }.to raise_error(SystemExit)
       end
     end
   end

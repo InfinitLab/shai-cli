@@ -175,4 +175,130 @@ RSpec.describe Shai::ApiClient do
       expect(result["message"]).to eq("Configuration deleted")
     end
   end
+
+  describe "#get_configuration" do
+    before do
+      Shai.credentials.save(
+        token: "test-token",
+        expires_at: (Time.now + 3600).iso8601,
+        user: {"username" => "testuser"}
+      )
+    end
+
+    context "when configuration exists" do
+      before { stub_get_configuration(slug: "my-config") }
+
+      it "returns configuration details" do
+        result = client.get_configuration("my-config")
+
+        expect(result["configuration"]["slug"]).to eq("my-config")
+        expect(result["configuration"]["name"]).to eq("Test Config")
+      end
+    end
+
+    context "when configuration does not exist" do
+      before { stub_not_found("/api/v1/configurations/nonexistent") }
+
+      it "raises NotFoundError" do
+        expect {
+          client.get_configuration("nonexistent")
+        }.to raise_error(Shai::NotFoundError)
+      end
+    end
+
+    context "when permission denied" do
+      before { stub_permission_denied("/api/v1/configurations/private-config") }
+
+      it "raises PermissionDeniedError" do
+        expect {
+          client.get_configuration("private-config")
+        }.to raise_error(Shai::PermissionDeniedError)
+      end
+    end
+  end
+
+  describe "#update_configuration" do
+    before do
+      Shai.credentials.save(
+        token: "test-token",
+        expires_at: (Time.now + 3600).iso8601,
+        user: {"username" => "testuser"}
+      )
+      stub_update_configuration(slug: "my-config")
+    end
+
+    it "updates configuration" do
+      result = client.update_configuration("my-config", name: "Updated Name")
+
+      expect(result["message"]).to eq("Configuration updated")
+    end
+  end
+
+  describe "error handling" do
+    before do
+      Shai.credentials.save(
+        token: "test-token",
+        expires_at: (Time.now + 3600).iso8601,
+        user: {"username" => "testuser"}
+      )
+    end
+
+    context "when server returns 500 error" do
+      before do
+        stub_request(:get, "https://shai.dev/api/v1/configurations")
+          .to_return(
+            status: 500,
+            headers: {"Content-Type" => "application/json"},
+            body: {error: "Internal server error"}.to_json
+          )
+      end
+
+      it "raises Error" do
+        expect {
+          client.list_configurations
+        }.to raise_error(Shai::Error, /Internal server error/)
+      end
+    end
+
+    context "when server returns 422 validation error" do
+      before do
+        stub_request(:post, "https://shai.dev/api/v1/configurations")
+          .to_return(
+            status: 422,
+            headers: {"Content-Type" => "application/json"},
+            body: {error: "Name can't be blank"}.to_json
+          )
+      end
+
+      it "raises InvalidConfigurationError" do
+        expect {
+          client.create_configuration(name: "")
+        }.to raise_error(Shai::InvalidConfigurationError, /Name can't be blank/)
+      end
+    end
+  end
+
+  describe "authentication handling" do
+    context "when token is expired" do
+      before do
+        Shai.credentials.save(
+          token: "expired-token",
+          expires_at: (Time.now - 3600).iso8601,
+          user: {"username" => "testuser"}
+        )
+        stub_request(:get, "https://shai.dev/api/v1/configurations")
+          .to_return(
+            status: 401,
+            headers: {"Content-Type" => "application/json"},
+            body: {error: "Token expired"}.to_json
+          )
+      end
+
+      it "raises AuthenticationError" do
+        expect {
+          client.list_configurations
+        }.to raise_error(Shai::AuthenticationError)
+      end
+    end
+  end
 end

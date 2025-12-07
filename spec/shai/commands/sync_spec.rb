@@ -148,5 +148,185 @@ RSpec.describe "Sync commands" do
         expect { cli.init }.to raise_error(SystemExit)
       end
     end
+
+    context "when creating new configuration" do
+      before do
+        allow(File).to receive(:exist?).with(".shairc").and_return(false)
+        allow(ui).to receive(:ask).with("Configuration name:").and_return("My Config")
+        allow(ui).to receive(:ask).with(/Description/).and_return("A description")
+        allow(ui).to receive(:select).and_return("private")
+        allow(ui).to receive(:ask).with("Include paths (glob patterns, comma-separated):", default: ".claude/**,.cursor/**").and_return(".claude/**,.cursor/**")
+        allow(File).to receive(:write)
+        allow(api).to receive(:create_configuration).and_return({
+          "configuration" => {"slug" => "my-config"}
+        })
+      end
+
+      it "creates configuration and writes .shairc file" do
+        expect(api).to receive(:create_configuration).with(
+          name: "My Config",
+          description: "A description",
+          visibility: "private"
+        )
+        expect(File).to receive(:write).with(".shairc", anything)
+        expect(ui).to receive(:success).with(/Created my-config/)
+        cli.init
+      end
+    end
+
+    context "when API returns validation error" do
+      before do
+        allow(File).to receive(:exist?).with(".shairc").and_return(false)
+        allow(ui).to receive(:ask).and_return("", "desc")
+        allow(ui).to receive(:select).and_return("private")
+        allow(api).to receive(:create_configuration).and_raise(Shai::InvalidConfigurationError, "Name can't be blank")
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/Name can't be blank/)
+        expect { cli.init }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe "#status" do
+    context "when there are local changes" do
+      let(:remote_tree) do
+        [
+          {"kind" => "file", "path" => ".claude/old.md", "content" => "# Old"}
+        ]
+      end
+
+      before do
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([".claude/new.md"])
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/new.md").and_return("# New")
+        allow(File).to receive(:dirname).and_call_original
+      end
+
+      it "displays local changes" do
+        expect(ui).to receive(:info).with(/Local changes/)
+        cli.status
+      end
+    end
+
+    context "when configuration not found on remote" do
+      before do
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "nonexistent"})
+        allow(api).to receive(:get_tree).and_raise(Shai::NotFoundError, "Not found")
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/not found/)
+        expect { cli.status }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe "#push" do
+    context "when no files match include patterns" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, message: nil})
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".nonexistent/**"]})
+        allow(Dir).to receive(:glob).and_return([])
+      end
+
+      it "displays warning about no files" do
+        expect(ui).to receive(:warning).with(/No files found/)
+        expect { cli.push }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when push succeeds" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, message: nil})
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(Dir).to receive(:glob).and_return([".claude/config.md"])
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/config.md").and_return("# Config")
+        allow(File).to receive(:dirname).and_call_original
+        allow(api).to receive(:update_tree).and_return({"message" => "success"})
+      end
+
+      it "uploads tree and displays success" do
+        expect(api).to receive(:update_tree).with("my-config", anything)
+        expect(ui).to receive(:success).with(/Pushed/)
+        cli.push
+      end
+    end
+
+    context "when push fails with not found" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, message: nil})
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "nonexistent", "include" => [".claude/**"]})
+        allow(Dir).to receive(:glob).and_return([".claude/config.md"])
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).and_return("# Config")
+        allow(File).to receive(:dirname).and_call_original
+        allow(api).to receive(:update_tree).and_raise(Shai::NotFoundError, "Not found")
+      end
+
+      it "displays error message" do
+        expect(ui).to receive(:error).with(/not found/)
+        expect { cli.push }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe "#diff" do
+    context "when there are modified files" do
+      let(:remote_tree) do
+        [
+          {"kind" => "file", "path" => ".claude/config.md", "content" => "# Old Content"}
+        ]
+      end
+
+      before do
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([".claude/config.md"])
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/config.md").and_return("# New Content")
+        allow(File).to receive(:dirname).and_call_original
+      end
+
+      it "displays diff for modified files" do
+        expect(ui).to receive(:info).with(/--- remote/)
+        expect(ui).to receive(:info).with(/\+\+\+ local/)
+        expect(ui).to receive(:diff)
+        cli.diff
+      end
+    end
+
+    context "when there are new files" do
+      let(:remote_tree) { [] }
+
+      before do
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).with(".shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with(".shairc").and_return({"slug" => "my-config", "include" => [".claude/**"]})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => remote_tree})
+        allow(Dir).to receive(:glob).and_return([".claude/new.md"])
+        allow(File).to receive(:directory?).and_return(false)
+        allow(File).to receive(:read).with(".claude/new.md").and_return("# New File")
+        allow(File).to receive(:dirname).and_call_original
+      end
+
+      it "displays diff for new files" do
+        expect(ui).to receive(:info).with(/--- \/dev\/null/)
+        expect(ui).to receive(:info).with(/\+\+\+ local/)
+        expect(ui).to receive(:diff)
+        cli.diff
+      end
+    end
   end
 end
