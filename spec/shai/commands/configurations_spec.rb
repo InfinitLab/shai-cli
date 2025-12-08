@@ -137,12 +137,13 @@ RSpec.describe "Configurations commands" do
       end
     end
 
-    context "when .shairc already exists" do
+    context "when .shai-installed already exists" do
       before do
         allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test"})
         allow(File).to receive(:expand_path).with("/tmp/test").and_return("/tmp/test")
-        allow(File).to receive(:exist?).with("/tmp/test/.shairc").and_return(true)
-        allow(YAML).to receive(:safe_load_file).with("/tmp/test/.shairc").and_return({"slug" => "existing-config"})
+        allow(File).to receive(:exist?).with("/tmp/test/.shai-installed").and_return(true)
+        allow(File).to receive(:exist?).with("/tmp/test/.shairc").and_return(false)
+        allow(YAML).to receive(:safe_load_file).with("/tmp/test/.shai-installed").and_return({"slug" => "existing-config"})
       end
 
       it "displays error and suggests uninstall" do
@@ -152,12 +153,27 @@ RSpec.describe "Configurations commands" do
       end
     end
 
-    context "when .shairc exists but force option is used" do
+    context "when .shairc already exists" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test"})
+        allow(File).to receive(:expand_path).with("/tmp/test").and_return("/tmp/test")
+        allow(File).to receive(:exist?).with("/tmp/test/.shai-installed").and_return(false)
+        allow(File).to receive(:exist?).with("/tmp/test/.shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with("/tmp/test/.shairc").and_return({"slug" => "authored-config"})
+      end
+
+      it "displays error and suggests uninstall" do
+        expect(ui).to receive(:error).with(/already present/)
+        expect(ui).to receive(:indent).with(/shai uninstall authored-config/)
+        expect { cli.install("my-config") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when existing config but force option is used" do
       before do
         allow(cli).to receive(:options).and_return({dry_run: false, force: true, path: "/tmp/test"})
         allow(File).to receive(:expand_path).with("/tmp/test").and_return("/tmp/test")
-        allow(File).to receive(:exist?).with("/tmp/test/.shairc").and_return(true)
-        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?).and_return(false)
         allow(FileUtils).to receive(:mkdir_p)
         allow(File).to receive(:write)
       end

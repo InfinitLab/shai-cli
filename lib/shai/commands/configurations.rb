@@ -5,6 +5,8 @@ require "time"
 module Shai
   module Commands
     module Configurations
+      INSTALLED_FILE = ".shai-installed"
+
       def self.included(base)
         base.class_eval do
           desc "list", "List your configurations"
@@ -80,25 +82,39 @@ module Shai
             display_name = owner ? "#{owner}/#{slug}" : slug
             base_path = File.expand_path(options[:path])
             shairc_path = File.join(base_path, ".shairc")
+            installed_path = File.join(base_path, Shai::Commands::Configurations::INSTALLED_FILE)
 
             # Check if a configuration is already installed/initialized
-            if File.exist?(shairc_path) && !options[:force]
-              existing_config = begin
-                YAML.safe_load_file(shairc_path)
-              rescue
-                {}
-              end
-              existing_slug = existing_config["slug"] || "unknown"
+            unless options[:force]
+              existing_slug = nil
 
-              ui.error("A configuration is already present in this directory.")
-              ui.indent("Existing: #{existing_slug}")
-              ui.blank
-              ui.info("To install a different configuration:")
-              ui.indent("1. Run `shai uninstall #{existing_slug}` to remove the current configuration")
-              ui.indent("2. Then run `shai install #{display_name}`")
-              ui.blank
-              ui.info("Or use --force to install anyway (may cause conflicts)")
-              exit EXIT_INVALID_INPUT
+              if File.exist?(installed_path)
+                existing_config = begin
+                  YAML.safe_load_file(installed_path)
+                rescue
+                  {}
+                end
+                existing_slug = existing_config["slug"]
+              elsif File.exist?(shairc_path)
+                existing_config = begin
+                  YAML.safe_load_file(shairc_path)
+                rescue
+                  {}
+                end
+                existing_slug = existing_config["slug"]
+              end
+
+              if existing_slug
+                ui.error("A configuration is already present in this directory.")
+                ui.indent("Existing: #{existing_slug}")
+                ui.blank
+                ui.info("To install a different configuration:")
+                ui.indent("1. Run `shai uninstall #{existing_slug}` to remove the current configuration")
+                ui.indent("2. Then run `shai install #{display_name}`")
+                ui.blank
+                ui.info("Or use --force to install anyway (may cause conflicts)")
+                exit EXIT_INVALID_INPUT
+              end
             end
 
             begin
@@ -166,8 +182,16 @@ module Shai
                 created_count += 1
               end
 
+              # Write installation tracking file
+              installed_content = <<~YAML
+                # Installed by shai - do not edit manually
+                slug: #{display_name}
+                installed_at: #{Time.now.iso8601}
+              YAML
+              File.write(installed_path, installed_content)
+
               ui.blank
-              ui.success("Installed #{created_count} items")
+              ui.success("Installed #{created_count} items from #{display_name}")
             rescue NotFoundError
               ui.error("Configuration '#{display_name}' not found.")
               exit EXIT_NOT_FOUND
@@ -247,6 +271,13 @@ module Shai
                   Dir.rmdir(local_path)
                   ui.display_file_operation(:deleted, path + "/")
                 end
+              end
+
+              # Remove installation tracking file
+              installed_path = File.join(base_path, Shai::Commands::Configurations::INSTALLED_FILE)
+              if File.exist?(installed_path)
+                File.delete(installed_path)
+                ui.display_file_operation(:deleted, Shai::Commands::Configurations::INSTALLED_FILE)
               end
 
               ui.blank
