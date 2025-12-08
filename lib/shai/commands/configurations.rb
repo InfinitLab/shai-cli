@@ -78,6 +78,28 @@ module Shai
           def install(configuration)
             owner, slug = parse_configuration_name(configuration)
             display_name = owner ? "#{owner}/#{slug}" : slug
+            base_path = File.expand_path(options[:path])
+            shairc_path = File.join(base_path, ".shairc")
+
+            # Check if a configuration is already installed/initialized
+            if File.exist?(shairc_path) && !options[:force]
+              existing_config = begin
+                YAML.safe_load_file(shairc_path)
+              rescue
+                {}
+              end
+              existing_slug = existing_config["slug"] || "unknown"
+
+              ui.error("A configuration is already present in this directory.")
+              ui.indent("Existing: #{existing_slug}")
+              ui.blank
+              ui.info("To install a different configuration:")
+              ui.indent("1. Run `shai uninstall #{existing_slug}` to remove the current configuration")
+              ui.indent("2. Then run `shai install #{display_name}`")
+              ui.blank
+              ui.info("Or use --force to install anyway (may cause conflicts)")
+              exit EXIT_INVALID_INPUT
+            end
 
             begin
               response = ui.spinner("Fetching #{display_name}...") do
@@ -85,7 +107,6 @@ module Shai
               end
 
               tree = response["tree"]
-              base_path = File.expand_path(options[:path])
 
               # Check for conflicts
               conflicts = []

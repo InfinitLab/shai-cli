@@ -136,6 +136,38 @@ RSpec.describe "Configurations commands" do
         expect { cli.install("nonexistent") }.to raise_error(SystemExit)
       end
     end
+
+    context "when .shairc already exists" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test"})
+        allow(File).to receive(:expand_path).with("/tmp/test").and_return("/tmp/test")
+        allow(File).to receive(:exist?).with("/tmp/test/.shairc").and_return(true)
+        allow(YAML).to receive(:safe_load_file).with("/tmp/test/.shairc").and_return({"slug" => "existing-config"})
+      end
+
+      it "displays error and suggests uninstall" do
+        expect(ui).to receive(:error).with(/already present/)
+        expect(ui).to receive(:indent).with(/shai uninstall existing-config/)
+        expect { cli.install("my-config") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when .shairc exists but force option is used" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: true, path: "/tmp/test"})
+        allow(File).to receive(:expand_path).with("/tmp/test").and_return("/tmp/test")
+        allow(File).to receive(:exist?).with("/tmp/test/.shairc").and_return(true)
+        allow(File).to receive(:exist?).and_call_original
+        allow(FileUtils).to receive(:mkdir_p)
+        allow(File).to receive(:write)
+      end
+
+      it "proceeds with installation" do
+        expect(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
+        expect(ui).to receive(:success).with(/Installed/)
+        cli.install("my-config")
+      end
+    end
   end
 
   describe "#search" do

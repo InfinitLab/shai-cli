@@ -36,3 +36,6 @@ Thumbs.db
 
 # Local credentials (development)
 /.config/
+
+# Local configuration tests
+/sandbox/
