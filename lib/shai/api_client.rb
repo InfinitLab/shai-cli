@@ -2,6 +2,7 @@
 
 require "faraday"
 require "json"
+require "uri"
 
 module Shai
   class ApiClient
@@ -31,8 +32,8 @@ module Shai
       get("/api/v1/configurations/search", params)
     end
 
-    def get_configuration(slug)
-      get("/api/v1/configurations/#{slug}")
+    def get_configuration(identifier)
+      get("/api/v1/configurations/#{encode_identifier(identifier)}")
     end
 
     def create_configuration(name:, description: nil, visibility: "private")
@@ -45,22 +46,27 @@ module Shai
       })
     end
 
-    def update_configuration(slug, **attributes)
-      put("/api/v1/configurations/#{slug}", {
+    def update_configuration(identifier, **attributes)
+      put("/api/v1/configurations/#{encode_identifier(identifier)}", {
         configuration: attributes
       })
     end
 
-    def delete_configuration(slug)
-      delete("/api/v1/configurations/#{slug}")
+    def delete_configuration(identifier)
+      delete("/api/v1/configurations/#{encode_identifier(identifier)}")
     end
 
-    def get_tree(slug)
-      get("/api/v1/configurations/#{slug}/tree")
+    def get_tree(identifier)
+      get("/api/v1/configurations/#{encode_identifier(identifier)}/tree")
     end
 
-    def update_tree(slug, tree)
-      put("/api/v1/configurations/#{slug}/tree", {tree: tree})
+    def update_tree(identifier, tree)
+      put("/api/v1/configurations/#{encode_identifier(identifier)}/tree", {tree: tree})
+    end
+
+    # Encode identifier for URL (handles owner/slug format)
+    def encode_identifier(identifier)
+      URI.encode_www_form_component(identifier)
     end
 
     private

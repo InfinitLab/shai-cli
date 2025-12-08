@@ -121,7 +121,9 @@ module Shai
     # Configuration display
     def display_configuration(config, detailed: false)
       name = config["slug"] || config["name"]
-      owner = config.dig("owner", "username")
+      # owner can be a string (username) or a hash with "username" key
+      owner = config["owner"]
+      owner = owner["username"] if owner.is_a?(Hash)
       full_name = owner ? "#{owner}/#{name}" : name
       visibility = config["visibility"]
       stars = config["stars_count"] || 0

@@ -119,7 +119,7 @@ module Shai
 
             begin
               response = ui.spinner("Fetching #{display_name}...") do
-                api.get_tree(slug)
+                api.get_tree(display_name)
               end
 
               tree = response["tree"]
@@ -185,8 +185,8 @@ module Shai
               # Write installation tracking file
               installed_content = <<~YAML
                 # Installed by shai - do not edit manually
-                slug: #{display_name}
-                installed_at: #{Time.now.iso8601}
+                slug: "#{display_name}"
+                installed_at: "#{Time.now.iso8601}"
               YAML
               File.write(installed_path, installed_content)
 
@@ -215,7 +215,7 @@ module Shai
 
             begin
               response = ui.spinner("Fetching #{display_name}...") do
-                api.get_tree(slug)
+                api.get_tree(display_name)
               end
 
               tree = response.is_a?(Array) ? response : response["tree"]

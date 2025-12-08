@@ -267,11 +267,12 @@ RSpec.describe "Configurations commands" do
 
     context "with owner/slug format" do
       before do
-        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
+        allow(api).to receive(:get_tree).with("anthropic/my-config").and_return({"tree" => tree})
         allow(cli).to receive(:options).and_return({dry_run: true, force: false, path: "."})
       end
 
-      it "parses owner/slug format" do
+      it "passes full owner/slug to API" do
+        expect(api).to receive(:get_tree).with("anthropic/my-config")
         expect(ui).to receive(:header).with(/Would install/)
         cli.install("anthropic/my-config")
       end
