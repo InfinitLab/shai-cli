@@ -77,7 +77,30 @@ module Shai
     end
 
     def yes?(question, default: false)
-      @prompt.yes?(question, default: default)
+      require "io/console"
+
+      hint = default ? "(Y/n)" : "(y/N)"
+      print "#{question} #{hint} "
+      $stdout.flush
+
+      loop do
+        key = $stdin.getch
+        case key
+        when "y", "Y"
+          puts "y"
+          return true
+        when "n", "N"
+          puts "n"
+          return false
+        when "\r", "\n"
+          puts default ? "y" : "n"
+          return default
+        when "\u0003" # Ctrl+C
+          puts
+          raise Interrupt
+        end
+        # Ignore other keys, keep waiting
+      end
     end
 
     def select(question, choices, **options)
