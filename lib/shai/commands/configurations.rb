@@ -204,11 +204,31 @@ module Shai
             end
           end
 
-          desc "uninstall CONFIGURATION", "Remove an installed configuration from local project"
+          desc "uninstall [CONFIGURATION]", "Remove an installed configuration from local project"
           option :dry_run, type: :boolean, default: false, desc: "Show what would be removed"
           option :path, type: :string, default: ".", desc: "Path where configuration is installed"
-          def uninstall(configuration)
+          def uninstall(configuration = nil)
             require_auth!
+
+            base_path = File.expand_path(options[:path])
+            installed_path = File.join(base_path, INSTALLED_FILE)
+
+            # If no configuration specified, try to read from .shai-installed
+            if configuration.nil?
+              unless File.exist?(installed_path)
+                ui.error("No configuration specified and no .shai-installed file found.")
+                ui.info("Usage: shai uninstall <configuration>")
+                exit EXIT_INVALID_INPUT
+              end
+
+              installed_config = YAML.safe_load_file(installed_path)
+              configuration = installed_config["slug"]
+
+              unless configuration
+                ui.error("Could not read configuration from .shai-installed")
+                exit EXIT_INVALID_INPUT
+              end
+            end
 
             owner, slug = parse_configuration_name(configuration)
             display_name = owner ? "#{owner}/#{slug}" : slug
@@ -219,7 +239,6 @@ module Shai
               end
 
               tree = response.is_a?(Array) ? response : response["tree"]
-              base_path = File.expand_path(options[:path])
 
               # Find files that exist locally
               files_to_remove = []
