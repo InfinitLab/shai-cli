@@ -214,6 +214,9 @@ module Shai
                 api.get_tree(slug)["tree"]
               end
 
+              # Security: Validate all paths before any file operations
+              validate_tree_paths!(remote_tree, Dir.pwd)
+
               local_tree = build_local_tree(shairc)
 
               # Build lookup maps
@@ -379,6 +382,27 @@ module Shai
       end
 
       private
+
+      # Security: Validate that a path is safe and doesn't escape base_path
+      def safe_path?(path, base_path)
+        return false if path.nil? || path.empty?
+        return false if path.start_with?("/") # No absolute paths
+        return false if path.include?("..") # No directory traversal
+        return false if path.include?("\0") # No null bytes
+
+        # Verify resolved path stays within base_path
+        full_path = File.expand_path(path, base_path)
+        full_path.start_with?(File.expand_path(base_path) + "/") || full_path == File.expand_path(base_path)
+      end
+
+      def validate_tree_paths!(tree, base_path)
+        tree.each do |node|
+          path = node["path"] || node[:path]
+          unless safe_path?(path, base_path)
+            raise SecurityError, "Invalid path detected: #{path.inspect}"
+          end
+        end
+      end
 
       def load_shairc
         unless File.exist?(SHAIRC_FILE)

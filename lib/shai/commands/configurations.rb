@@ -124,6 +124,9 @@ module Shai
 
               tree = response["tree"]
 
+              # Security: Validate all paths before any file operations
+              validate_tree_paths!(tree, base_path)
+
               # Check for conflicts
               conflicts = []
               tree.each do |node|
@@ -240,6 +243,9 @@ module Shai
 
               tree = response.is_a?(Array) ? response : response["tree"]
 
+              # Security: Validate all paths before any file operations
+              validate_tree_paths!(tree, base_path)
+
               # Find files that exist locally
               files_to_remove = []
               folders_to_remove = []
@@ -322,6 +328,26 @@ module Shai
           name.split("/", 2)
         else
           [nil, name]
+        end
+      end
+
+      # Security: Validate that a path is safe and doesn't escape base_path
+      def safe_path?(path, base_path)
+        return false if path.nil? || path.empty?
+        return false if path.start_with?("/") # No absolute paths
+        return false if path.include?("..") # No directory traversal
+        return false if path.include?("\0") # No null bytes
+
+        # Verify resolved path stays within base_path
+        full_path = File.expand_path(path, base_path)
+        full_path.start_with?(File.expand_path(base_path) + "/") || full_path == File.expand_path(base_path)
+      end
+
+      def validate_tree_paths!(tree, base_path)
+        tree.each do |node|
+          unless safe_path?(node["path"], base_path)
+            raise SecurityError, "Invalid path detected: #{node["path"].inspect}"
+          end
         end
       end
 

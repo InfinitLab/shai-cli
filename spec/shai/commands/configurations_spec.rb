@@ -172,6 +172,7 @@ RSpec.describe "Configurations commands" do
     context "when existing config but force option is used" do
       before do
         allow(cli).to receive(:options).and_return({dry_run: false, force: true, path: "/tmp/test"})
+        allow(File).to receive(:expand_path).and_call_original
         allow(File).to receive(:expand_path).with("/tmp/test").and_return("/tmp/test")
         allow(File).to receive(:exist?).and_return(false)
         allow(FileUtils).to receive(:mkdir_p)
