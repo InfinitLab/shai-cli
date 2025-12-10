@@ -2,7 +2,7 @@
 
 module ApiHelpers
   def stub_login_success(identifier: "test@example.com", username: "testuser")
-    stub_request(:post, "https://shai.dev/api/v1/cli/session")
+    stub_request(:post, "https://shaicli.dev/api/v1/cli/session")
       .to_return(
         status: 200,
         headers: {"Content-Type" => "application/json"},
@@ -22,7 +22,7 @@ module ApiHelpers
   end
 
   def stub_login_failure
-    stub_request(:post, "https://shai.dev/api/v1/cli/session")
+    stub_request(:post, "https://shaicli.dev/api/v1/cli/session")
       .to_return(
         status: 401,
         headers: {"Content-Type" => "application/json"},
@@ -31,7 +31,7 @@ module ApiHelpers
   end
 
   def stub_list_configurations(configurations: [])
-    stub_request(:get, "https://shai.dev/api/v1/configurations")
+    stub_request(:get, "https://shaicli.dev/api/v1/configurations")
       .to_return(
         status: 200,
         headers: {"Content-Type" => "application/json"},
@@ -40,7 +40,7 @@ module ApiHelpers
   end
 
   def stub_search_configurations(query: nil, configurations: [])
-    url = "https://shai.dev/api/v1/configurations/search"
+    url = "https://shaicli.dev/api/v1/configurations/search"
     url += "?q=#{query}" if query
 
     stub_request(:get, url)
@@ -52,7 +52,7 @@ module ApiHelpers
   end
 
   def stub_get_tree(slug:, tree: [])
-    stub_request(:get, "https://shai.dev/api/v1/configurations/#{slug}/tree")
+    stub_request(:get, "https://shaicli.dev/api/v1/configurations/#{slug}/tree")
       .to_return(
         status: 200,
         headers: {"Content-Type" => "application/json"},
@@ -61,7 +61,7 @@ module ApiHelpers
   end
 
   def stub_update_tree(slug:)
-    stub_request(:put, "https://shai.dev/api/v1/configurations/#{slug}/tree")
+    stub_request(:put, "https://shaicli.dev/api/v1/configurations/#{slug}/tree")
       .to_return(
         status: 200,
         headers: {"Content-Type" => "application/json"},
@@ -70,7 +70,7 @@ module ApiHelpers
   end
 
   def stub_create_configuration(name:, slug:)
-    stub_request(:post, "https://shai.dev/api/v1/configurations")
+    stub_request(:post, "https://shaicli.dev/api/v1/configurations")
       .to_return(
         status: 201,
         headers: {"Content-Type" => "application/json"},
@@ -99,7 +99,7 @@ module ApiHelpers
       updated_at: Time.now.iso8601
     }
 
-    stub_request(:get, "https://shai.dev/api/v1/configurations/#{slug}")
+    stub_request(:get, "https://shaicli.dev/api/v1/configurations/#{slug}")
       .to_return(
         status: 200,
         headers: {"Content-Type" => "application/json"},
@@ -108,7 +108,7 @@ module ApiHelpers
   end
 
   def stub_update_configuration(slug:)
-    stub_request(:put, "https://shai.dev/api/v1/configurations/#{slug}")
+    stub_request(:put, "https://shaicli.dev/api/v1/configurations/#{slug}")
       .to_return(
         status: 200,
         headers: {"Content-Type" => "application/json"},
@@ -117,7 +117,7 @@ module ApiHelpers
   end
 
   def stub_delete_configuration(slug:)
-    stub_request(:delete, "https://shai.dev/api/v1/configurations/#{slug}")
+    stub_request(:delete, "https://shaicli.dev/api/v1/configurations/#{slug}")
       .to_return(
         status: 200,
         headers: {"Content-Type" => "application/json"},
@@ -126,7 +126,7 @@ module ApiHelpers
   end
 
   def stub_not_found(path)
-    stub_request(:get, "https://shai.dev#{path}")
+    stub_request(:get, "https://shaicli.dev#{path}")
       .to_return(
         status: 404,
         headers: {"Content-Type" => "application/json"},
@@ -135,7 +135,7 @@ module ApiHelpers
   end
 
   def stub_permission_denied(path)
-    stub_request(:get, "https://shai.dev#{path}")
+    stub_request(:get, "https://shaicli.dev#{path}")
       .to_return(
         status: 403,
         headers: {"Content-Type" => "application/json"},

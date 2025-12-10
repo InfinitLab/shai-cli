@@ -10,7 +10,7 @@ module Shai
     attr_reader :api_url
 
     def initialize
-      self.api_url = ENV.fetch("SHAI_API_URL", "https://shai.dev")
+      self.api_url = ENV.fetch("SHAI_API_URL", "https://shaicli.dev")
       @config_dir = expand_path(ENV.fetch("SHAI_CONFIG_DIR", default_config_dir))
       @token = ENV["SHAI_TOKEN"]
     end

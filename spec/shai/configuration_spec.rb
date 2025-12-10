@@ -4,21 +4,21 @@ RSpec.describe Shai::Configuration do
   let(:config) { described_class.new }
 
   describe "#api_url" do
-    it "defaults to https://shai.dev" do
-      expect(config.api_url).to eq("https://shai.dev")
+    it "defaults to https://shaicli.dev" do
+      expect(config.api_url).to eq("https://shaicli.dev")
     end
 
     context "when SHAI_API_URL is set" do
       around do |example|
         original = ENV["SHAI_API_URL"]
-        ENV["SHAI_API_URL"] = "https://staging.shai.dev"
+        ENV["SHAI_API_URL"] = "https://staging.shaicli.dev"
         Shai.reset!
         example.run
         ENV["SHAI_API_URL"] = original
       end
 
       it "uses the environment variable" do
-        expect(described_class.new.api_url).to eq("https://staging.shai.dev")
+        expect(described_class.new.api_url).to eq("https://staging.shaicli.dev")
       end
     end
 
@@ -51,7 +51,7 @@ RSpec.describe Shai::Configuration do
 
       it "rejects HTTP for production-like domains" do
         expect {
-          config.api_url = "http://shai.dev"
+          config.api_url = "http://shaicli.dev"
         }.to raise_error(Shai::Configuration::InsecureConnectionError)
       end
     end

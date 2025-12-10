@@ -5,7 +5,7 @@ module Shai
     module Auth
       def self.included(base)
         base.class_eval do
-          desc "login", "Log in to shai.dev"
+          desc "login", "Log in to shaicli.dev"
           def login
             identifier = ui.ask("Email or username:")
             password = ui.mask("Password:")

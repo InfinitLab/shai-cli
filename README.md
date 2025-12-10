@@ -1,13 +1,13 @@
 # shai-cli
 
-Command-line tool for managing and sharing AI agent configurations via [shai.dev](https://shai.dev).
+Command-line tool for managing and sharing AI agent configurations via [shaicli.dev](https://shaicli.dev).
 
 ## Installation
 
 ### Quick install (recommended)
 
 ```bash
-curl -fsSL https://shai.dev/install.sh | bash
+curl -fsSL https://shaicli.dev/install.sh | bash
 ```
 
 ### Via RubyGems
@@ -28,7 +28,7 @@ bundle exec rake install
 ## Quick Start
 
 ```bash
-# Login to your shai.dev account
+# Login to your shaicli.dev account
 shai login
 
 # Search for public configurations
@@ -48,7 +48,7 @@ shai push
 
 | Command | Description |
 |---------|-------------|
-| `shai login` | Log in to shai.dev |
+| `shai login` | Log in to shaicli.dev |
 | `shai logout` | Log out and remove stored credentials |
 | `shai whoami` | Show current authentication status |
 
@@ -84,7 +84,7 @@ shai push
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SHAI_API_URL` | API endpoint URL | `https://shai.dev` |
+| `SHAI_API_URL` | API endpoint URL | `https://shaicli.dev` |
 | `SHAI_CONFIG_DIR` | Directory for credentials | `~/.config/shai` |
 | `SHAI_TOKEN` | Override authentication token | - |
 | `NO_COLOR` | Disable colored output | - |

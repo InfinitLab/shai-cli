@@ -28,7 +28,7 @@ RSpec.configure do |config|
     temp_config_dir = Dir.mktmpdir("shai-test")
     Shai.configure do |c|
       c.config_dir = temp_config_dir
-      c.api_url = "https://shai.dev"
+      c.api_url = "https://shaicli.dev"
     end
   end
 

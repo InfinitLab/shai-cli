@@ -26,7 +26,7 @@ module Shai
       shell.say "  shai <command> [options]"
       shell.say ""
       shell.say "AUTHENTICATION:"
-      shell.say "  login              Log in to shai.dev"
+      shell.say "  login              Log in to shaicli.dev"
       shell.say "  logout             Log out and remove stored credentials"
       shell.say "  whoami             Show current authentication status"
       shell.say ""

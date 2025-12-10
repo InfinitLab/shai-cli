@@ -6,11 +6,11 @@ Gem::Specification.new do |spec|
   spec.name = "shai-cli"
   spec.version = Shai::VERSION
   spec.authors = ["Sebastian Jimenez"]
-  spec.email = ["sebastian@infinitlab.com"]
+  spec.email = ["sebastian@infinitlab.co"]
 
   spec.summary = "CLI tool for managing shared AI agent configurations"
-  spec.description = "A command-line interface for shai.dev - download, share, and sync AI agent configurations (Claude, Cursor, etc.) across projects and teams."
-  spec.homepage = "https://shai.dev"
+  spec.description = "A command-line interface for shaicli.dev - download, share, and sync AI agent configurations (Claude, Cursor, etc.) across projects and teams."
+  spec.homepage = "https://shaicli.dev"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 

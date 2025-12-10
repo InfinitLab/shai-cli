@@ -245,7 +245,7 @@ RSpec.describe Shai::ApiClient do
 
     context "when server returns 500 error" do
       before do
-        stub_request(:get, "https://shai.dev/api/v1/configurations")
+        stub_request(:get, "https://shaicli.dev/api/v1/configurations")
           .to_return(
             status: 500,
             headers: {"Content-Type" => "application/json"},
@@ -262,7 +262,7 @@ RSpec.describe Shai::ApiClient do
 
     context "when server returns 422 validation error" do
       before do
-        stub_request(:post, "https://shai.dev/api/v1/configurations")
+        stub_request(:post, "https://shaicli.dev/api/v1/configurations")
           .to_return(
             status: 422,
             headers: {"Content-Type" => "application/json"},
@@ -286,7 +286,7 @@ RSpec.describe Shai::ApiClient do
           expires_at: (Time.now - 3600).iso8601,
           user: {"username" => "testuser"}
         )
-        stub_request(:get, "https://shai.dev/api/v1/configurations")
+        stub_request(:get, "https://shaicli.dev/api/v1/configurations")
           .to_return(
             status: 401,
             headers: {"Content-Type" => "application/json"},
