@@ -135,7 +135,8 @@ module Shai
 
     def default_client_name
       hostname = begin
-        `hostname`.strip
+        require "socket"
+        Socket.gethostname
       rescue
         "Unknown"
       end
