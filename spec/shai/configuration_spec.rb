@@ -21,6 +21,40 @@ RSpec.describe Shai::Configuration do
         expect(described_class.new.api_url).to eq("https://staging.shai.dev")
       end
     end
+
+    context "HTTPS enforcement" do
+      it "allows HTTPS URLs" do
+        config.api_url = "https://api.example.com"
+        expect(config.api_url).to eq("https://api.example.com")
+      end
+
+      it "allows HTTP for localhost" do
+        config.api_url = "http://localhost:3000"
+        expect(config.api_url).to eq("http://localhost:3000")
+      end
+
+      it "allows HTTP for 127.0.0.1" do
+        config.api_url = "http://127.0.0.1:3000"
+        expect(config.api_url).to eq("http://127.0.0.1:3000")
+      end
+
+      it "allows HTTP for ::1 (IPv6 localhost)" do
+        config.api_url = "http://[::1]:3000"
+        expect(config.api_url).to eq("http://[::1]:3000")
+      end
+
+      it "rejects HTTP for non-localhost URLs" do
+        expect {
+          config.api_url = "http://api.example.com"
+        }.to raise_error(Shai::Configuration::InsecureConnectionError, /HTTPS is required/)
+      end
+
+      it "rejects HTTP for production-like domains" do
+        expect {
+          config.api_url = "http://shai.dev"
+        }.to raise_error(Shai::Configuration::InsecureConnectionError)
+      end
+    end
   end
 
   describe "#config_dir" do

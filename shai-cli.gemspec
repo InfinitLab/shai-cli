@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description = "A command-line interface for shai.dev - download, share, and sync AI agent configurations (Claude, Cursor, etc.) across projects and teams."
   spec.homepage = "https://shai.dev"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.3.0"
+  spec.required_ruby_version = ">= 3.1.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/infinitlab/shai-cli"
