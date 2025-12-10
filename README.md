@@ -4,7 +4,13 @@ Command-line tool for managing and sharing AI agent configurations via [shai.dev
 
 ## Installation
 
-### Via RubyGems (recommended)
+### Quick install (recommended)
+
+```bash
+curl -fsSL https://shai.dev/install.sh | bash
+```
+
+### Via RubyGems
 
 ```bash
 gem install shai-cli
