@@ -73,7 +73,9 @@ module Shai
           ui.info("Name: #{config["name"]}")
           ui.info("Description: #{config["description"] || "(none)"}")
           ui.info("Visibility: #{config["visibility"]}")
-          ui.info("Owner: #{config.dig("owner", "username") || credentials.username}")
+          owner = config["owner"]
+          owner_name = owner.is_a?(Hash) ? owner["username"] : owner
+          ui.info("Owner: #{owner_name || credentials.username}")
           ui.info("Stars: #{config["stars_count"] || 0}")
           ui.info("URL: #{Shai.configuration.api_url}/#{credentials.username}/#{config["slug"]}")
           ui.info("Created: #{format_config_date(config["created_at"])}")
