@@ -52,6 +52,15 @@ shai push
 | `shai logout` | Log out and remove stored credentials |
 | `shai whoami` | Show current authentication status |
 
+```bash
+$ shai whoami
+Logged in as johndoe (John Doe)
+Token expires: March 11, 2026
+
+$ shai logout
+✓ Logged out successfully
+```
+
 ### Discovery
 
 | Command | Description |
@@ -66,6 +75,21 @@ shai push
 | `shai install <config>` | Install a configuration to local project |
 | `shai uninstall <config>` | Remove an installed configuration |
 
+```bash
+$ shai uninstall anthropic/claude-expert
+[✔] Fetching anthropic/claude-expert...
+Remove 3 files and 1 folder from 'anthropic/claude-expert'? (y/N) y
+Uninstalling anthropic/claude-expert...
+
+  Deleted .claude/settings.json
+  Deleted .claude/agents/BACKEND.md
+  Deleted CLAUDE.md
+  Deleted .claude/
+  Deleted .shai-installed
+
+✓ Uninstalled anthropic/claude-expert
+```
+
 ### Authoring Configurations
 
 | Command | Description |
@@ -77,6 +101,71 @@ shai push
 | `shai config show` | Show configuration details |
 | `shai config set <key> <value>` | Update configuration metadata |
 | `shai delete <slug>` | Delete a configuration from remote |
+
+```bash
+$ shai init
+Configuration name: my-claude-setup
+Description (optional): My personal Claude Code configuration
+Visibility: public
+Include paths (glob patterns, comma-separated): .claude,CLAUDE.md
+
+[✔] Creating configuration...
+✓ Created my-claude-setup
+  Remote: https://shaicli.dev/johndoe/my-claude-setup
+
+Next steps:
+  1. Add or modify files matching your include patterns
+  2. Run `shai push` to upload your configuration
+
+$ shai push
+Pushing to johndoe/my-claude-setup...
+
+  Uploading .claude
+  Uploading CLAUDE.md
+[✔] Uploading...
+
+✓ Pushed 2 items
+  View at: https://shaicli.dev/johndoe/my-claude-setup
+
+$ shai status
+[✔] Fetching remote state...
+Configuration: johndoe/my-claude-setup
+Status: Local changes
+
+Modified:
+  CLAUDE.md
+
+Run `shai push` to upload changes.
+
+$ shai diff
+[✔] Fetching remote state...
+--- remote CLAUDE.md
++++ local CLAUDE.md
+ Refer to .claude/agents for specialized agents.
++
++Added new guidelines for testing.
+
+$ shai config show
+[✔] Fetching configuration...
+Configuration: my-claude-setup
+Name: My Claude Setup
+Description: My personal Claude Code configuration
+Visibility: public
+Owner: johndoe
+Stars: 12
+URL: https://shaicli.dev/johndoe/my-claude-setup
+Created: December 11, 2025
+Updated: December 11, 2025
+
+$ shai config set description "Updated description"
+[✔] Updating...
+✓ Updated description to 'Updated description'
+
+$ shai delete my-claude-setup
+Are you sure you want to delete 'my-claude-setup'? This cannot be undone. (y/N) y
+[✔] Deleting...
+✓ Configuration 'my-claude-setup' deleted
+```
 
 ## Configuration
 
@@ -111,12 +200,6 @@ exclude:
 | `exclude` | Glob patterns for files to exclude |
 
 ## Examples
-
-### Search by tags
-
-```bash
-shai search --tag claude --tag coding
-```
 
 ### Install to specific directory
 
