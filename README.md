@@ -68,6 +68,25 @@ shai push
 
 ## Commands
 
+### No Login Required
+
+These commands work without authentication for public configurations:
+
+| Command                   | Description                                            |
+| ------------------------- | ------------------------------------------------------ |
+| `shai search <query>`     | Search public configurations                           |
+| `shai install <config>`   | Install a public configuration (use `owner/slug` format) |
+| `shai uninstall <config>` | Uninstall a public configuration                       |
+
+```bash
+# No login needed for public configs
+shai search "claude code"
+shai install anthropic/claude-expert
+shai uninstall anthropic/claude-expert
+```
+
+---
+
 ### Authentication
 
 | Command       | Description                           |

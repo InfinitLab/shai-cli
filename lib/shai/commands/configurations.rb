@@ -211,7 +211,8 @@ module Shai
           option :dry_run, type: :boolean, default: false, desc: "Show what would be removed"
           option :path, type: :string, default: ".", desc: "Path where configuration is installed"
           def uninstall(configuration = nil)
-            require_auth!
+            # No auth required - uninstall just fetches tree (works for public configs)
+            # and removes local files
 
             base_path = File.expand_path(options[:path])
             installed_path = File.join(base_path, INSTALLED_FILE)
