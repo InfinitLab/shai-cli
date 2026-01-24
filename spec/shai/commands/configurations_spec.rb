@@ -298,6 +298,125 @@ RSpec.describe "Configurations commands" do
     end
   end
 
+  describe "#open" do
+    before do
+      allow(Shai.configuration).to receive(:api_url).and_return("https://shaicli.dev")
+    end
+
+    context "when user owns the configuration" do
+      before do
+        allow(credentials).to receive(:username).and_return("testuser")
+        allow(api).to receive(:get_configuration).with("testuser/my-config").and_return({
+          "slug" => "my-config",
+          "visibility" => "private",
+          "owner" => "testuser"
+        })
+      end
+
+      it "opens configuration_projects URL" do
+        expect(ui).to receive(:info).with(/Opening testuser\/my-config in browser/)
+        expect(Launchy).to receive(:open).with("https://shaicli.dev/configuration_projects/my-config")
+        cli.open("testuser/my-config")
+      end
+    end
+
+    context "when viewing public config owned by another user" do
+      before do
+        allow(credentials).to receive(:username).and_return("testuser")
+        allow(api).to receive(:get_configuration).with("anthropic/claude-expert").and_return({
+          "slug" => "claude-expert",
+          "visibility" => "public",
+          "owner" => "anthropic"
+        })
+      end
+
+      it "opens explore URL with owner/slug" do
+        expect(ui).to receive(:info).with(/Opening anthropic\/claude-expert in browser/)
+        expect(Launchy).to receive(:open).with("https://shaicli.dev/explore/anthropic/claude-expert")
+        cli.open("anthropic/claude-expert")
+      end
+    end
+
+    context "when not authenticated and viewing public config" do
+      before do
+        allow(credentials).to receive(:authenticated?).and_return(false)
+        allow(api).to receive(:get_configuration).with("anthropic/claude-expert").and_return({
+          "slug" => "claude-expert",
+          "visibility" => "public",
+          "owner" => "anthropic"
+        })
+      end
+
+      it "opens explore URL" do
+        expect(ui).to receive(:info).with(/Opening anthropic\/claude-expert in browser/)
+        expect(Launchy).to receive(:open).with("https://shaicli.dev/explore/anthropic/claude-expert")
+        cli.open("anthropic/claude-expert")
+      end
+    end
+
+    context "when configuration is private and not owned by user" do
+      before do
+        allow(credentials).to receive(:username).and_return("testuser")
+        allow(api).to receive(:get_configuration).with("other/private-config").and_return({
+          "slug" => "private-config",
+          "visibility" => "private",
+          "owner" => "other"
+        })
+      end
+
+      it "displays error and exits" do
+        expect(ui).to receive(:error).with(/private and you don't have access/)
+        expect(Launchy).not_to receive(:open)
+        expect { cli.open("other/private-config") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when configuration not found with owner/slug format" do
+      before do
+        allow(api).to receive(:get_configuration).and_raise(Shai::NotFoundError, "Not found")
+      end
+
+      it "displays error about public config and exits" do
+        expect(ui).to receive(:error).with(/not found/)
+        expect(ui).to receive(:info).with(/may be private/)
+        expect(Launchy).not_to receive(:open)
+        expect { cli.open("nonexistent/config") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when configuration not found with slug only" do
+      before do
+        allow(api).to receive(:get_configuration).and_raise(Shai::NotFoundError, "Not found")
+      end
+
+      it "displays error about user's projects and exits" do
+        expect(ui).to receive(:error).with(/not found in your projects/)
+        expect(ui).to receive(:info).with(/owner\/slug/)
+        expect(Launchy).not_to receive(:open)
+        expect { cli.open("nonexistent") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when Launchy fails" do
+      before do
+        allow(credentials).to receive(:username).and_return("testuser")
+        allow(api).to receive(:get_configuration).with("testuser/my-config").and_return({
+          "slug" => "my-config",
+          "visibility" => "public",
+          "owner" => "testuser"
+        })
+        allow(Launchy).to receive(:open).and_raise(Launchy::Error.new("No browser"))
+      end
+
+      it "displays URL as fallback" do
+        expect(ui).to receive(:info).with(/Opening/)
+        expect(ui).to receive(:warning).with(/Could not open browser/)
+        expect(ui).to receive(:info).with(%r{Visit: https://shaicli.dev/configuration_projects/my-config})
+        cli.open("testuser/my-config")
+      end
+    end
+  end
+
   describe "#uninstall" do
     let(:installed_projects) { instance_double(Shai::InstalledProjects) }
 

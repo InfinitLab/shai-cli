@@ -52,7 +52,7 @@ module Shai
               rescue AuthenticationError
                 ui.error("Invalid credentials")
                 exit EXIT_AUTH_REQUIRED
-              rescue RateLimitError => e
+              rescue RateLimitError
                 ui.error("Too many login attempts. Please try again later.")
                 exit EXIT_GENERAL_ERROR
               rescue NetworkError => e

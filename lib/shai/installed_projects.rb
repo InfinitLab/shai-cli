@@ -128,7 +128,7 @@ module Shai
       else
         raw
       end
-    rescue => e
+    rescue
       # If file is corrupted, start fresh
       default_data
     end

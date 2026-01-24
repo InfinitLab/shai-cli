@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "time"
-require "set"
 
 module Shai
   module Commands
@@ -227,6 +226,67 @@ module Shai
               exit EXIT_NOT_FOUND
             rescue PermissionDeniedError
               ui.error("You don't have permission to access '#{display_name}'.")
+              exit EXIT_PERMISSION_DENIED
+            rescue NetworkError => e
+              ui.error(e.message)
+              exit EXIT_NETWORK_ERROR
+            end
+          end
+
+          desc "open CONFIGURATION", "Open a configuration in the browser"
+          def open(configuration)
+            owner, slug = parse_configuration_name(configuration)
+            display_name = owner ? "#{owner}/#{slug}" : slug
+            base_url = Shai.configuration.api_url
+
+            # Fetch configuration details to determine ownership and visibility
+            begin
+              config = ui.spinner("Fetching #{display_name}...") do
+                api.get_configuration(display_name)
+              end
+
+              config_owner = config["owner"]
+              config_slug = config["slug"]
+              visibility = config["visibility"]
+              current_username = credentials.authenticated? ? credentials.username : nil
+
+              # Determine the appropriate URL based on ownership
+              if current_username && config_owner == current_username
+                # User owns this config - open in configuration_projects
+                url = "#{base_url}/configuration_projects/#{config_slug}"
+              elsif visibility == "public"
+                # Public config owned by someone else - open in explore
+                url = "#{base_url}/explore/#{config_owner}/#{config_slug}"
+              else
+                # Private config not owned by user - can't access
+                ui.error("Configuration '#{display_name}' is private and you don't have access.")
+                exit EXIT_PERMISSION_DENIED
+              end
+
+              ui.info("Opening #{display_name} in browser...")
+
+              begin
+                require "launchy"
+                Launchy.open(url)
+              rescue LoadError
+                ui.warning("Could not open browser automatically.")
+                ui.info("Visit: #{url}")
+              rescue Launchy::Error => e
+                ui.warning("Could not open browser: #{e.message}")
+                ui.info("Visit: #{url}")
+              end
+            rescue NotFoundError
+              if owner
+                ui.error("Configuration '#{display_name}' not found.")
+                ui.info("It may be private or doesn't exist.")
+              else
+                ui.error("Configuration '#{display_name}' not found in your projects.")
+                ui.info("Use 'owner/slug' format to open someone else's public configuration.")
+              end
+              exit EXIT_NOT_FOUND
+            rescue PermissionDeniedError
+              ui.error("You don't have permission to access '#{display_name}'.")
+              ui.info("This configuration may be private.")
               exit EXIT_PERMISSION_DENIED
             rescue NetworkError => e
               ui.error(e.message)
