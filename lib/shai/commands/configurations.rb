@@ -215,6 +215,13 @@ module Shai
               # Track the installed project
               installed.add_project(display_name, created_files)
 
+              # Record the install for analytics (fire and forget)
+              begin
+                api.record_install(display_name)
+              rescue
+                # Silently ignore install tracking errors
+              end
+
               ui.blank
               ui.success("Installed #{display_name}")
 

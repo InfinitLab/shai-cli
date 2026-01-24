@@ -79,6 +79,10 @@ module Shai
       put("/api/v1/configurations/#{encode_identifier(identifier)}/tree", {tree: tree})
     end
 
+    def record_install(identifier)
+      post_without_auth("/api/v1/configurations/#{encode_identifier(identifier)}/install", {})
+    end
+
     # Encode identifier for URL (handles owner/slug format)
     def encode_identifier(identifier)
       URI.encode_www_form_component(identifier)

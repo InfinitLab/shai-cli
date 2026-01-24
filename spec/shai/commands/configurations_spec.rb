@@ -212,6 +212,7 @@ RSpec.describe "Configurations commands" do
       before do
         allow(cli).to receive(:options).and_return({dry_run: false, force: true, path: "/tmp/test"})
         allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
+        allow(api).to receive(:record_install)
         allow(File).to receive(:exist?).and_return(false)
         allow(FileUtils).to receive(:mkdir_p)
         allow(File).to receive(:write)
@@ -284,6 +285,7 @@ RSpec.describe "Configurations commands" do
       before do
         allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test"})
         allow(api).to receive(:get_tree).with("cursor-config").and_return({"tree" => tree2})
+        allow(api).to receive(:record_install)
         allow(installed_projects).to receive(:project_count).and_return(2)
         allow(File).to receive(:exist?).and_return(false)
         allow(FileUtils).to receive(:mkdir_p)
