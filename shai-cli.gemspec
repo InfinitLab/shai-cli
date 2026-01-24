@@ -36,4 +36,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "tty-table", "~> 0.12"
   spec.add_dependency "pastel", "~> 0.8"
   spec.add_dependency "diffy", "~> 3.4"
+  spec.add_dependency "launchy", "~> 2.5"
 end

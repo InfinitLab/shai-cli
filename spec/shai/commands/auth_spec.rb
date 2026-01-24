@@ -17,12 +17,19 @@ RSpec.describe "Auth commands" do
     allow(ui).to receive(:info)
     allow(ui).to receive(:error)
     allow(ui).to receive(:success)
+    allow(ui).to receive(:warning)
     allow(ui).to receive(:blank)
     allow(ui).to receive(:indent)
     allow(ui).to receive(:spinner).and_yield
+    allow(ui).to receive(:cyan) { |t| t }
+    allow(ui).to receive(:bold) { |t| t }
   end
 
-  describe "#login" do
+  describe "#login with --password" do
+    before do
+      allow(cli).to receive(:options).and_return({password: true})
+    end
+
     context "when credentials are valid" do
       let(:response) do
         {
@@ -82,7 +89,166 @@ RSpec.describe "Auth commands" do
     end
   end
 
+  describe "#login with device flow (default)" do
+    let(:spinner) { instance_double(TTY::Spinner) }
+
+    before do
+      allow(cli).to receive(:options).and_return({password: false})
+      allow(TTY::Spinner).to receive(:new).and_return(spinner)
+      allow(spinner).to receive(:auto_spin)
+      allow(spinner).to receive(:success)
+      allow(spinner).to receive(:error)
+      # Stub sleep to make tests fast
+      allow(cli).to receive(:sleep)
+    end
+
+    context "when authorization succeeds" do
+      let(:device_response) do
+        {
+          "device_code" => "abc123devicecode",
+          "user_code" => "ABCD-1234",
+          "verification_uri" => "https://shaicli.dev/device",
+          "verification_uri_complete" => "https://shaicli.dev/device?code=ABCD-1234",
+          "expires_in" => 600,
+          "interval" => 5
+        }
+      end
+
+      let(:token_response) do
+        {
+          "data" => {
+            "token" => "final_token_123",
+            "expires_at" => "2025-12-31T23:59:59Z",
+            "user" => {
+              "username" => "testuser",
+              "display_name" => "Test User"
+            }
+          }
+        }
+      end
+
+      before do
+        allow(api).to receive(:device_authorize).and_return(device_response)
+        allow(ui).to receive(:yes?).and_return(false) # Don't open browser
+        allow(credentials).to receive(:save)
+      end
+
+      it "displays device code instructions" do
+        allow(api).to receive(:device_token).and_return(token_response)
+
+        expect(ui).to receive(:info).with("Starting device authorization...")
+        expect(ui).to receive(:info).with("To authorize this device:")
+        expect(ui).to receive(:indent).with(/Visit:.*shaicli.dev\/device/)
+        expect(ui).to receive(:indent).with(/Enter code:.*ABCD-1234/)
+
+        cli.login
+      end
+
+      it "polls for token and saves credentials on approval" do
+        allow(api).to receive(:device_token).and_return(token_response)
+
+        expect(credentials).to receive(:save).with(
+          token: "final_token_123",
+          expires_at: "2025-12-31T23:59:59Z",
+          user: {"username" => "testuser", "display_name" => "Test User"}
+        )
+        expect(ui).to receive(:success).with(/Logged in as testuser/)
+
+        cli.login
+      end
+
+      it "handles authorization_pending by continuing to poll" do
+        call_count = 0
+        allow(api).to receive(:device_token) do
+          call_count += 1
+          if call_count < 3
+            raise Shai::DeviceFlowError.new("authorization_pending")
+          else
+            token_response
+          end
+        end
+
+        expect(credentials).to receive(:save)
+        cli.login
+      end
+
+      it "handles slow_down by increasing interval" do
+        call_count = 0
+        allow(api).to receive(:device_token) do
+          call_count += 1
+          if call_count == 1
+            raise Shai::DeviceFlowError.new("slow_down", interval: 10)
+          else
+            token_response
+          end
+        end
+
+        expect(credentials).to receive(:save)
+        cli.login
+      end
+    end
+
+    context "when authorization is denied" do
+      let(:device_response) do
+        {
+          "device_code" => "abc123devicecode",
+          "user_code" => "ABCD-1234",
+          "verification_uri" => "https://shaicli.dev/device",
+          "interval" => 5
+        }
+      end
+
+      before do
+        allow(api).to receive(:device_authorize).and_return(device_response)
+        allow(ui).to receive(:yes?).and_return(false)
+        allow(api).to receive(:device_token).and_raise(Shai::DeviceFlowError.new("access_denied"))
+      end
+
+      it "displays error and exits" do
+        expect(ui).to receive(:error).with(/Authorization denied/)
+        expect { cli.login }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when device code expires" do
+      let(:device_response) do
+        {
+          "device_code" => "abc123devicecode",
+          "user_code" => "ABCD-1234",
+          "verification_uri" => "https://shaicli.dev/device",
+          "interval" => 5
+        }
+      end
+
+      before do
+        allow(api).to receive(:device_authorize).and_return(device_response)
+        allow(ui).to receive(:yes?).and_return(false)
+        allow(api).to receive(:device_token).and_raise(Shai::DeviceFlowError.new("expired_token"))
+      end
+
+      it "displays error and exits" do
+        expect(ui).to receive(:error).with(/expired/)
+        expect { cli.login }.to raise_error(SystemExit)
+      end
+    end
+
+    context "when network error occurs during authorization" do
+      before do
+        allow(api).to receive(:device_authorize).and_raise(Shai::NetworkError, "Connection failed")
+      end
+
+      it "displays error and exits" do
+        expect(ui).to receive(:error).with(/Connection failed/)
+        expect { cli.login }.to raise_error(SystemExit)
+      end
+    end
+  end
+
   describe "#whoami" do
+    before do
+      allow(cli).to receive(:options).and_return({})
+    end
+
     context "when authenticated" do
       before do
         allow(credentials).to receive(:authenticated?).and_return(true)
@@ -126,6 +292,7 @@ RSpec.describe "Auth commands" do
 
   describe "#logout" do
     before do
+      allow(cli).to receive(:options).and_return({})
       allow(credentials).to receive(:clear)
     end
 

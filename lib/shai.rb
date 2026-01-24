@@ -19,6 +19,41 @@ module Shai
 
   class InvalidConfigurationError < Error; end
 
+  class RateLimitError < Error
+    attr_reader :retry_after
+
+    def initialize(message = "Too many requests", retry_after: nil)
+      @retry_after = retry_after
+      super(message)
+    end
+  end
+
+  class DeviceFlowError < Error
+    attr_reader :error_code, :interval
+
+    def initialize(error_code, interval: nil)
+      @error_code = error_code
+      @interval = interval
+      super(error_code)
+    end
+
+    def authorization_pending?
+      error_code == "authorization_pending"
+    end
+
+    def slow_down?
+      error_code == "slow_down"
+    end
+
+    def access_denied?
+      error_code == "access_denied"
+    end
+
+    def expired?
+      error_code == "expired_token"
+    end
+  end
+
   # Exit codes as specified in tech spec
   EXIT_SUCCESS = 0
   EXIT_GENERAL_ERROR = 1

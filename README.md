@@ -89,11 +89,48 @@ shai uninstall anthropic/claude-expert
 
 ### Authentication
 
-| Command       | Description                           |
-| ------------- | ------------------------------------- |
-| `shai login`  | Log in to shaicli.dev                 |
-| `shai logout` | Log out and remove stored credentials |
-| `shai whoami` | Show current authentication status    |
+| Command                | Description                                    |
+| ---------------------- | ---------------------------------------------- |
+| `shai login`           | Log in via browser (device flow, recommended)  |
+| `shai login --password`| Log in with email/password directly            |
+| `shai logout`          | Log out and remove stored credentials          |
+| `shai whoami`          | Show current authentication status             |
+
+**Device Flow (default):**
+
+The default login uses OAuth 2.0 Device Authorization Grant - a secure flow that doesn't require entering your password in the terminal:
+
+```bash
+$ shai login
+Starting device authorization...
+
+To authorize this device:
+
+  1. Visit: https://shaicli.dev/device
+  2. Enter code: ABCD-1234
+
+Open browser automatically? (Y/n) y
+
+[⠋] Waiting for authorization...
+
+✓ Logged in as johndoe
+  Token expires: March 11, 2026
+  Token stored in ~/.config/shai/credentials
+```
+
+**Password Flow (legacy):**
+
+If you prefer to enter credentials directly:
+
+```bash
+$ shai login --password
+Email or username: johndoe
+Password: ********
+
+✓ Logged in as johndoe
+```
+
+**Check Status:**
 
 ```bash
 $ shai whoami

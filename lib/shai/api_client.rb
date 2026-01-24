@@ -20,6 +20,21 @@ module Shai
       })
     end
 
+    # Device Flow Authentication (RFC 8628)
+    def device_authorize(client_name: nil)
+      client_name ||= default_client_name
+      post_without_auth("/api/v1/device/authorize", {
+        client_name: client_name
+      })
+    end
+
+    def device_token(device_code:)
+      response = @connection.post("/api/v1/device/token") do |req|
+        req.body = {device_code: device_code}
+      end
+      handle_device_token_response(response)
+    end
+
     # Configurations
     def list_configurations
       get("/api/v1/configurations")
@@ -94,6 +109,13 @@ module Shai
       handle_response(response)
     end
 
+    def post_without_auth(path, body)
+      response = @connection.post(path) do |req|
+        req.body = body
+      end
+      handle_response(response)
+    end
+
     def put(path, body)
       response = @connection.put(path) do |req|
         add_auth_header(req)
@@ -126,6 +148,29 @@ module Shai
         raise NotFoundError, response.body&.dig("error") || "Not found"
       when 422
         raise InvalidConfigurationError, response.body&.dig("error") || "Invalid request"
+      when 429
+        retry_after = response.headers["Retry-After"]&.to_i
+        raise RateLimitError.new(
+          response.body&.dig("error") || "Too many requests. Please try again later.",
+          retry_after: retry_after
+        )
+      else
+        raise Error, response.body&.dig("error") || "Request failed with status #{response.status}"
+      end
+    rescue Faraday::ConnectionFailed, Faraday::TimeoutError
+      raise NetworkError, "Could not connect to #{Shai.configuration.api_url}. Check your internet connection."
+    end
+
+    def handle_device_token_response(response)
+      case response.status
+      when 200
+        response.body
+      when 400
+        error_code = response.body&.dig("error")
+        interval = response.body&.dig("interval")
+        raise DeviceFlowError.new(error_code, interval: interval)
+      when 429
+        raise DeviceFlowError.new("slow_down", interval: 10)
       else
         raise Error, response.body&.dig("error") || "Request failed with status #{response.status}"
       end
