@@ -4,6 +4,7 @@ require_relative "shai/version"
 require_relative "shai/configuration"
 require_relative "shai/credentials"
 require_relative "shai/api_client"
+require_relative "shai/installed_projects"
 require_relative "shai/cli"
 
 module Shai

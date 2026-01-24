@@ -1,12 +1,11 @@
 # frozen_string_literal: true
 
 require "time"
+require "set"
 
 module Shai
   module Commands
     module Configurations
-      INSTALLED_FILE = ".shai-installed"
-
       def self.included(base)
         base.class_eval do
           desc "list", "List your configurations"
@@ -82,37 +81,31 @@ module Shai
             display_name = owner ? "#{owner}/#{slug}" : slug
             base_path = File.expand_path(options[:path])
             shairc_path = File.join(base_path, ".shairc")
-            installed_path = File.join(base_path, Shai::Commands::Configurations::INSTALLED_FILE)
 
-            # Check if a configuration is already installed/initialized
-            unless options[:force]
-              existing_slug = nil
+            installed = InstalledProjects.new(base_path)
 
-              if File.exist?(installed_path)
-                existing_config = begin
-                  YAML.safe_load_file(installed_path)
-                rescue
-                  {}
-                end
-                existing_slug = existing_config["slug"]
-              elsif File.exist?(shairc_path)
-                existing_config = begin
-                  YAML.safe_load_file(shairc_path)
-                rescue
-                  {}
-                end
-                existing_slug = existing_config["slug"]
+            # Check if this exact project is already installed
+            if installed.has_project?(display_name) && !options[:force]
+              ui.error("'#{display_name}' is already installed in this directory.")
+              ui.info("Use --force to reinstall, or run `shai uninstall #{display_name}` first.")
+              exit EXIT_INVALID_INPUT
+            end
+
+            # Check if a .shairc exists (authored config)
+            if File.exist?(shairc_path) && !options[:force]
+              existing_config = begin
+                YAML.safe_load_file(shairc_path)
+              rescue
+                {}
               end
+              existing_slug = existing_config["slug"]
 
               if existing_slug
-                ui.error("A configuration is already present in this directory.")
+                ui.error("This directory contains an authored configuration (.shairc).")
                 ui.indent("Existing: #{existing_slug}")
                 ui.blank
-                ui.info("To install a different configuration:")
-                ui.indent("1. Run `shai uninstall #{existing_slug}` to remove the current configuration")
-                ui.indent("2. Then run `shai install #{display_name}`")
-                ui.blank
-                ui.info("Or use --force to install anyway (may cause conflicts)")
+                ui.info("Installing here may cause conflicts with your authored config.")
+                ui.info("Use --force to install anyway.")
                 exit EXIT_INVALID_INPUT
               end
             end
@@ -127,39 +120,65 @@ module Shai
               # Security: Validate all paths before any file operations
               validate_tree_paths!(tree, base_path)
 
-              # Check for conflicts
-              conflicts = []
+              # Get file paths from tree (excluding folders)
+              new_files = tree.reject { |n| n["kind"] == "folder" }.map { |n| n["path"] }
+
+              # Check for conflicts with existing local files
+              local_conflicts = []
               tree.each do |node|
                 next if node["kind"] == "folder"
-
                 local_path = File.join(base_path, node["path"])
-                conflicts << node["path"] if File.exist?(local_path)
+                local_conflicts << node["path"] if File.exist?(local_path)
               end
+
+              # Check for conflicts with other installed projects
+              project_conflicts = installed.find_conflicts(new_files)
 
               if options[:dry_run]
                 ui.header("Would install:")
                 tree.each { |node| ui.display_file_operation(:would_create, node["path"]) }
+
+                if project_conflicts.any?
+                  ui.blank
+                  ui.warning("Would conflict with installed projects:")
+                  project_conflicts.each do |file, owner|
+                    ui.indent("#{file} (from #{owner})")
+                  end
+                end
+
                 ui.blank
                 ui.info("No changes made (dry run)")
                 return
               end
 
               # Handle conflicts
-              if conflicts.any? && !options[:force]
-                ui.blank
-                ui.warning("The following files already exist:")
-                conflicts.each { |path| ui.display_file_operation(:conflict, path) }
+              if (local_conflicts.any? || project_conflicts.any?) && !options[:force]
                 ui.blank
 
-                choice = ui.select("Overwrite existing files?", [
-                  {name: "Yes", value: :yes},
-                  {name: "No (abort)", value: :no},
+                if project_conflicts.any?
+                  ui.warning("The following files conflict with already installed projects:")
+                  project_conflicts.each do |file, owner|
+                    ui.indent("#{file} #{ui.dim("(from #{owner})")}")
+                  end
+                  ui.blank
+                end
+
+                other_local_conflicts = local_conflicts - project_conflicts.keys
+                if other_local_conflicts.any?
+                  ui.warning("The following local files will be overwritten:")
+                  other_local_conflicts.each { |path| ui.display_file_operation(:conflict, path) }
+                  ui.blank
+                end
+
+                choice = ui.select("How would you like to proceed?", [
+                  {name: "Overwrite files (conflicting projects will be updated)", value: :yes},
+                  {name: "Cancel installation", value: :no},
                   {name: "Show diff", value: :diff}
                 ])
 
                 if choice == :diff
-                  show_install_diff(tree, base_path, conflicts)
-                  return unless ui.yes?("Overwrite existing files?")
+                  show_install_diff(tree, base_path, local_conflicts)
+                  return unless ui.yes?("Proceed with installation?")
                 elsif choice == :no
                   ui.info("Installation cancelled")
                   return
@@ -169,8 +188,17 @@ module Shai
               ui.header("Installing #{display_name}...")
               ui.blank
 
+              # Remove conflicting files from their original projects
+              if project_conflicts.any?
+                affected_projects = project_conflicts.values.uniq
+                affected_projects.each do |project_slug|
+                  files_to_remove = project_conflicts.select { |_, owner| owner == project_slug }.keys
+                  installed.remove_files_from_project(project_slug, files_to_remove)
+                end
+              end
+
               # Create folders and files
-              created_count = 0
+              created_files = []
               tree.sort_by { |n| (n["kind"] == "folder") ? 0 : 1 }.each do |node|
                 local_path = File.join(base_path, node["path"])
 
@@ -181,20 +209,19 @@ module Shai
                   FileUtils.mkdir_p(File.dirname(local_path))
                   File.write(local_path, node["content"])
                   ui.display_file_operation(:created, node["path"])
+                  created_files << node["path"]
                 end
-                created_count += 1
               end
 
-              # Write installation tracking file
-              installed_content = <<~YAML
-                # Installed by shai - do not edit manually
-                slug: "#{display_name}"
-                installed_at: "#{Time.now.iso8601}"
-              YAML
-              File.write(installed_path, installed_content)
+              # Track the installed project
+              installed.add_project(display_name, created_files)
 
               ui.blank
-              ui.success("Installed #{created_count} items from #{display_name}")
+              ui.success("Installed #{display_name}")
+
+              if installed.project_count > 1
+                ui.indent("#{installed.project_count} configurations now installed in this directory")
+              end
             rescue NotFoundError
               ui.error("Configuration '#{display_name}' not found.")
               exit EXIT_NOT_FOUND
@@ -211,112 +238,133 @@ module Shai
           option :dry_run, type: :boolean, default: false, desc: "Show what would be removed"
           option :path, type: :string, default: ".", desc: "Path where configuration is installed"
           def uninstall(configuration = nil)
-            # No auth required - uninstall just fetches tree (works for public configs)
-            # and removes local files
-
             base_path = File.expand_path(options[:path])
-            installed_path = File.join(base_path, INSTALLED_FILE)
+            installed = InstalledProjects.new(base_path)
 
-            # If no configuration specified, try to read from .shai-installed
+            # If no configuration specified, determine which to uninstall
             if configuration.nil?
-              unless File.exist?(installed_path)
-                ui.error("No configuration specified and no .shai-installed file found.")
+              if installed.empty?
+                ui.error("No configurations installed in this directory.")
                 ui.info("Usage: shai uninstall <configuration>")
                 exit EXIT_INVALID_INPUT
-              end
+              elsif installed.project_count == 1
+                configuration = installed.project_slugs.first
+                ui.info("Uninstalling #{configuration}...")
+              else
+                ui.info("Multiple configurations installed:")
+                configuration = ui.select("Which configuration do you want to uninstall?",
+                  installed.project_slugs.map { |s| {name: s, value: s} } + [{name: "Cancel", value: nil}])
 
-              installed_config = YAML.safe_load_file(installed_path)
-              configuration = installed_config["slug"]
-
-              unless configuration
-                ui.error("Could not read configuration from .shai-installed")
-                exit EXIT_INVALID_INPUT
+                if configuration.nil?
+                  ui.info("Uninstall cancelled")
+                  return
+                end
               end
             end
 
             owner, slug = parse_configuration_name(configuration)
             display_name = owner ? "#{owner}/#{slug}" : slug
 
-            begin
-              response = ui.spinner("Fetching #{display_name}...") do
-                api.get_tree(display_name)
+            # Get files to remove - either from tracking or from remote tree
+            tracked_files = installed.files_for_project(display_name)
+
+            if tracked_files.empty?
+              # Fall back to fetching from remote (for v1 migrations or manual installs)
+              begin
+                response = ui.spinner("Fetching #{display_name}...") do
+                  api.get_tree(display_name)
+                end
+
+                tree = response.is_a?(Array) ? response : response["tree"]
+                validate_tree_paths!(tree, base_path)
+
+                tracked_files = tree.reject { |n| n["kind"] == "folder" }.map { |n| n["path"] }
+              rescue NotFoundError
+                ui.error("Configuration '#{display_name}' not found and no tracked files.")
+                exit EXIT_NOT_FOUND
+              rescue PermissionDeniedError
+                ui.error("You don't have permission to access '#{display_name}'.")
+                exit EXIT_PERMISSION_DENIED
+              rescue NetworkError => e
+                ui.error(e.message)
+                exit EXIT_NETWORK_ERROR
               end
+            end
 
-              tree = response.is_a?(Array) ? response : response["tree"]
+            # Find files that exist locally
+            files_to_remove = []
+            folders_to_check = Set.new
 
-              # Security: Validate all paths before any file operations
-              validate_tree_paths!(tree, base_path)
-
-              # Find files that exist locally
-              files_to_remove = []
-              folders_to_remove = []
-
-              tree.each do |node|
-                local_path = File.join(base_path, node["path"])
-
-                if node["kind"] == "folder"
-                  folders_to_remove << node["path"] if Dir.exist?(local_path)
-                elsif File.exist?(local_path)
-                  files_to_remove << node["path"]
+            tracked_files.each do |path|
+              local_path = File.join(base_path, path)
+              if File.exist?(local_path)
+                files_to_remove << path
+                # Track parent folders for potential removal
+                dir = File.dirname(path)
+                while dir != "."
+                  folders_to_check << dir
+                  dir = File.dirname(dir)
                 end
               end
+            end
 
-              if files_to_remove.empty? && folders_to_remove.empty?
-                ui.info("No files from '#{display_name}' found in #{base_path}")
-                return
+            if files_to_remove.empty?
+              ui.info("No files from '#{display_name}' found in #{base_path}")
+
+              # Still remove from tracking if it exists
+              if installed.has_project?(display_name)
+                installed.remove_project(display_name)
+                installed.delete! if installed.empty?
               end
+              return
+            end
 
-              if options[:dry_run]
-                ui.header("Would remove:")
-                files_to_remove.each { |path| ui.display_file_operation(:would_create, path) }
-                folders_to_remove.sort.reverse_each { |path| ui.display_file_operation(:would_create, path + "/") }
-                ui.blank
-                ui.info("No changes made (dry run)")
-                return
-              end
-
-              unless ui.yes?("Remove #{files_to_remove.length} files and #{folders_to_remove.length} folders from '#{display_name}'?")
-                ui.info("Uninstall cancelled")
-                return
-              end
-
-              ui.header("Uninstalling #{display_name}...")
+            if options[:dry_run]
+              ui.header("Would remove:")
+              files_to_remove.each { |path| ui.display_file_operation(:would_create, path) }
               ui.blank
+              ui.info("No changes made (dry run)")
+              return
+            end
 
-              # Remove files first
-              files_to_remove.each do |path|
-                local_path = File.join(base_path, path)
-                File.delete(local_path)
-                ui.display_file_operation(:deleted, path)
+            unless ui.yes?("Remove #{files_to_remove.length} files from '#{display_name}'?")
+              ui.info("Uninstall cancelled")
+              return
+            end
+
+            ui.header("Uninstalling #{display_name}...")
+            ui.blank
+
+            # Remove files
+            files_to_remove.each do |path|
+              local_path = File.join(base_path, path)
+              File.delete(local_path)
+              ui.display_file_operation(:deleted, path)
+            end
+
+            # Remove empty folders (deepest first)
+            folders_to_check.to_a.sort.reverse_each do |path|
+              local_path = File.join(base_path, path)
+              if Dir.exist?(local_path) && Dir.empty?(local_path)
+                Dir.rmdir(local_path)
+                ui.display_file_operation(:deleted, path + "/")
               end
+            end
 
-              # Remove folders (deepest first)
-              folders_to_remove.sort.reverse_each do |path|
-                local_path = File.join(base_path, path)
-                if Dir.exist?(local_path) && Dir.empty?(local_path)
-                  Dir.rmdir(local_path)
-                  ui.display_file_operation(:deleted, path + "/")
-                end
-              end
+            # Update tracking
+            installed.remove_project(display_name)
 
-              # Remove installation tracking file
-              installed_path = File.join(base_path, Shai::Commands::Configurations::INSTALLED_FILE)
-              if File.exist?(installed_path)
-                File.delete(installed_path)
-                ui.display_file_operation(:deleted, Shai::Commands::Configurations::INSTALLED_FILE)
-              end
+            # Remove tracking file if no more projects
+            if installed.empty?
+              installed.delete!
+              ui.display_file_operation(:deleted, InstalledProjects::FILENAME)
+            end
 
-              ui.blank
-              ui.success("Uninstalled #{display_name}")
-            rescue NotFoundError
-              ui.error("Configuration '#{display_name}' not found.")
-              exit EXIT_NOT_FOUND
-            rescue PermissionDeniedError
-              ui.error("You don't have permission to access '#{display_name}'.")
-              exit EXIT_PERMISSION_DENIED
-            rescue NetworkError => e
-              ui.error(e.message)
-              exit EXIT_NETWORK_ERROR
+            ui.blank
+            ui.success("Uninstalled #{display_name}")
+
+            if installed.project_count > 0
+              ui.indent("#{installed.project_count} configuration(s) still installed")
             end
           end
         end
