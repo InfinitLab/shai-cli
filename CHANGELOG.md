@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Skills Management**: New `shai skills` command to list, enable, and disable AI agent skills. Scans multiple agent directories (Claude: `.claude/skills/`, Codex: `.agents/skills/`) in both global (`~/`) and local (`./`) scopes. Use `--agent` to target a specific agent. Disabling a skill renames `SKILL.md` to `SKILL.md.disabled` to hide it from the agent's discovery without deleting it.
 - **Global vs Local Installs**: `shai install` now supports `--global` (install to `~/`) and `--local` (install to `./`) flags. When neither is specified, the CLI prompts the user to choose. Global installs are useful for AI agent config files that should apply across all projects.
 - **Install Registry**: A central registry at `~/.config/shai/installations.yml` tracks where each configuration was installed. `shai uninstall` now automatically finds the right directory without needing `--path`.
 

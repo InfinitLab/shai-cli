@@ -192,6 +192,28 @@ Remove 3 files from 'anthropic/claude-expert'? (y/N) y
 
 ---
 
+### Skills
+
+| Command                                          | Description                              |
+| ------------------------------------------------ | ---------------------------------------- |
+| `shai skills`                                    | List all AI agent skills and their status |
+| `shai skills enable <name>`                      | Enable a disabled skill                  |
+| `shai skills enable <name> --global`             | Enable a global skill                    |
+| `shai skills disable <name>`                     | Disable an enabled skill                 |
+| `shai skills disable <name> --local`             | Disable a local skill                    |
+| `shai skills disable <name> --agent codex`       | Target a specific agent                  |
+
+Skills are `SKILL.md` files discovered across multiple AI agent directories:
+
+| Agent  | Global path                    | Local path                    |
+| ------ | ------------------------------ | ----------------------------- |
+| Claude | `~/.claude/skills/*/SKILL.md`  | `./.claude/skills/*/SKILL.md` |
+| Codex  | `~/.agents/skills/*/SKILL.md`  | `./.agents/skills/*/SKILL.md` |
+
+Disabling a skill renames `SKILL.md` to `SKILL.md.disabled` so the AI tool no longer loads it. Re-enabling reverses the rename. Use `--agent` to target a specific agent when the same skill name exists in multiple agents.
+
+---
+
 ### Authoring Configurations
 
 | Command                         | Description                        |

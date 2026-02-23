@@ -45,7 +45,7 @@ module Shai
       return default_data unless File.exist?(@file_path)
 
       raw = YAML.safe_load_file(@file_path) || {}
-      raw.is_a?(Hash) && raw["projects"].is_a?(Hash) ? raw : default_data
+      (raw.is_a?(Hash) && raw["projects"].is_a?(Hash)) ? raw : default_data
     rescue
       default_data
     end

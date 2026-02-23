@@ -505,7 +505,7 @@ module Shai
             {name: "./ (local - current directory)", value: :local},
             {name: "~/ (global - home directory)", value: :global}
           ])
-          choice == :global ? File.expand_path(Dir.home) : File.expand_path(".")
+          (choice == :global) ? File.expand_path(Dir.home) : File.expand_path(".")
         end
       end
 

@@ -5,6 +5,7 @@ require_relative "commands/auth"
 require_relative "commands/configurations"
 require_relative "commands/sync"
 require_relative "commands/config"
+require_relative "commands/skills"
 require_relative "ui"
 
 module Shai
@@ -13,6 +14,7 @@ module Shai
     include Commands::Configurations
     include Commands::Sync
     include Commands::Config
+    include Commands::Skills
 
     def self.exit_on_failure?
       true
@@ -39,6 +41,11 @@ module Shai
       shell.say "USING CONFIGURATIONS:"
       shell.say "  install <config>   Install a configuration (--global, --local, or --path)"
       shell.say "  uninstall <config> Remove an installed configuration"
+      shell.say ""
+      shell.say "SKILLS:"
+      shell.say "  skills             List all AI agent skills and their status"
+      shell.say "  skills enable <n>  Enable a disabled skill (--global, --local, --agent)"
+      shell.say "  skills disable <n> Disable an enabled skill (--global, --local, --agent)"
       shell.say ""
       shell.say "AUTHORING CONFIGURATIONS (create and publish):"
       shell.say "  init               Initialize a new configuration"
