@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Global vs Local Installs**: `shai install` now supports `--global` (install to `~/`) and `--local` (install to `./`) flags. When neither is specified, the CLI prompts the user to choose. Global installs are useful for AI agent config files that should apply across all projects.
+- **Install Registry**: A central registry at `~/.config/shai/installations.yml` tracks where each configuration was installed. `shai uninstall` now automatically finds the right directory without needing `--path`.
+
+### Changed
+
+- `shai uninstall` no longer requires `--path` — it resolves the install location from the registry. `--global` and `--local` flags are available as overrides.
+- `shai install --path` no longer defaults to `.` — if no location flag is provided, the user is prompted.
+
 ## [0.2.0] - 2026-01-24
 
 ### Added

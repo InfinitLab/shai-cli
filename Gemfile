@@ -17,5 +17,5 @@ group :test do
   gem "factory_bot", "~> 6.4"
   gem "webmock", "~> 3.23"
   gem "simplecov", require: false
-  gem "vcr", "~> 6.2"
+  gem "vcr", "~> 6.4"
 end

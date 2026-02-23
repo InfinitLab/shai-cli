@@ -146,18 +146,22 @@ RSpec.describe "Configurations commands" do
       ]
     end
     let(:installed_projects) { instance_double(Shai::InstalledProjects) }
+    let(:install_registry) { instance_double(Shai::InstallRegistry) }
 
     before do
       allow(Shai::InstalledProjects).to receive(:new).and_return(installed_projects)
+      allow(Shai::InstallRegistry).to receive(:new).and_return(install_registry)
       allow(installed_projects).to receive(:has_project?).and_return(false)
       allow(installed_projects).to receive(:find_conflicts).and_return({})
       allow(installed_projects).to receive(:add_project)
       allow(installed_projects).to receive(:project_count).and_return(1)
+      allow(install_registry).to receive(:has?).and_return(false)
+      allow(install_registry).to receive(:add)
     end
 
     context "with dry-run option" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: true, force: false, path: "."})
+        allow(cli).to receive(:options).and_return({dry_run: true, force: false, local: true, global: false, path: nil})
         allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
       end
 
@@ -173,7 +177,7 @@ RSpec.describe "Configurations commands" do
     context "when configuration not found" do
       before do
         allow(api).to receive(:get_tree).with("nonexistent").and_raise(Shai::NotFoundError, "Not found")
-        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "."})
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, local: true, global: false, path: nil})
       end
 
       it "displays error message" do
@@ -184,7 +188,7 @@ RSpec.describe "Configurations commands" do
 
     context "when same project is already installed" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "."})
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, local: true, global: false, path: nil})
         allow(installed_projects).to receive(:has_project?).with("my-config").and_return(true)
       end
 
@@ -197,7 +201,7 @@ RSpec.describe "Configurations commands" do
 
     context "when .shairc already exists" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test"})
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test", global: false, local: false})
         allow(File).to receive(:exist?).with("/tmp/test/.shairc").and_return(true)
         allow(YAML).to receive(:safe_load_file).with("/tmp/test/.shairc").and_return({"slug" => "authored-config"})
       end
@@ -210,7 +214,7 @@ RSpec.describe "Configurations commands" do
 
     context "when force option is used" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, force: true, path: "/tmp/test"})
+        allow(cli).to receive(:options).and_return({dry_run: false, force: true, path: "/tmp/test", global: false, local: false})
         allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
         allow(api).to receive(:record_install)
         allow(File).to receive(:exist?).and_return(false)
@@ -227,7 +231,7 @@ RSpec.describe "Configurations commands" do
     context "with owner/slug format" do
       before do
         allow(api).to receive(:get_tree).with("anthropic/my-config").and_return({"tree" => tree})
-        allow(cli).to receive(:options).and_return({dry_run: true, force: false, path: "."})
+        allow(cli).to receive(:options).and_return({dry_run: true, force: false, local: true, global: false, path: nil})
       end
 
       it "passes full owner/slug to API" do
@@ -240,7 +244,7 @@ RSpec.describe "Configurations commands" do
     context "with permission denied" do
       before do
         allow(api).to receive(:get_tree).with("private-config").and_raise(Shai::PermissionDeniedError, "Access denied")
-        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "."})
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, local: true, global: false, path: nil})
       end
 
       it "displays permission error" do
@@ -258,7 +262,7 @@ RSpec.describe "Configurations commands" do
       end
 
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test"})
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test", global: false, local: false})
         allow(api).to receive(:get_tree).with("other-config").and_return({"tree" => tree2})
         allow(installed_projects).to receive(:find_conflicts).and_return({
           ".claude/settings.json" => "my-config"
@@ -283,7 +287,7 @@ RSpec.describe "Configurations commands" do
       end
 
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test"})
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, path: "/tmp/test", global: false, local: false})
         allow(api).to receive(:get_tree).with("cursor-config").and_return({"tree" => tree2})
         allow(api).to receive(:record_install)
         allow(installed_projects).to receive(:project_count).and_return(2)
@@ -296,6 +300,56 @@ RSpec.describe "Configurations commands" do
         expect(ui).to receive(:success).with(/Installed cursor-config/)
         expect(ui).to receive(:indent).with(/2 configurations now installed/)
         cli.install("cursor-config")
+      end
+    end
+
+    context "when already installed elsewhere in registry" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, local: true, global: false, path: nil})
+        allow(install_registry).to receive(:has?).with("my-config").and_return(true)
+        allow(install_registry).to receive(:path_for).with("my-config").and_return("/other/path")
+      end
+
+      it "blocks install and suggests uninstall first" do
+        expect(ui).to receive(:error).with(/already installed at \/other\/path/)
+        expect(ui).to receive(:info).with(/shai uninstall/)
+        expect { cli.install("my-config") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "with --global flag" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: true, force: false, global: true, local: false, path: nil})
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
+      end
+
+      it "installs to home directory" do
+        expect(Shai::InstalledProjects).to receive(:new).with(File.expand_path(Dir.home)).and_return(installed_projects)
+        cli.install("my-config")
+      end
+    end
+
+    context "with conflicting flags" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, force: false, global: true, local: true, path: nil})
+      end
+
+      it "displays error about conflicting options" do
+        expect(ui).to receive(:error).with(/Conflicting options/)
+        expect { cli.install("my-config") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "with no flags prompts user" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: true, force: false, global: false, local: false, path: nil})
+        allow(ui).to receive(:select).and_return(:local)
+        allow(api).to receive(:get_tree).with("my-config").and_return({"tree" => tree})
+      end
+
+      it "prompts for install location" do
+        expect(ui).to receive(:select).with(/Where do you want to install/, anything).and_return(:local)
+        cli.install("my-config")
       end
     end
   end
@@ -421,14 +475,18 @@ RSpec.describe "Configurations commands" do
 
   describe "#uninstall" do
     let(:installed_projects) { instance_double(Shai::InstalledProjects) }
+    let(:install_registry) { instance_double(Shai::InstallRegistry) }
 
     before do
       allow(Shai::InstalledProjects).to receive(:new).and_return(installed_projects)
+      allow(Shai::InstallRegistry).to receive(:new).and_return(install_registry)
+      allow(install_registry).to receive(:path_for).and_return(nil)
+      allow(install_registry).to receive(:remove)
     end
 
     context "with dry-run option" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: true, path: "/tmp"})
+        allow(cli).to receive(:options).and_return({dry_run: true, global: false, local: false})
         allow(installed_projects).to receive(:files_for_project).with("my-config").and_return([".claude/settings.json"])
         allow(File).to receive(:exist?).and_return(true)
       end
@@ -442,7 +500,8 @@ RSpec.describe "Configurations commands" do
 
     context "when user confirms removal" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, path: "/tmp/test"})
+        allow(cli).to receive(:options).and_return({dry_run: false, global: false, local: false})
+        allow(install_registry).to receive(:path_for).with("my-config").and_return("/tmp/test")
         allow(installed_projects).to receive(:files_for_project).with("my-config").and_return([".claude/settings.json"])
         allow(installed_projects).to receive(:has_project?).and_return(true)
         allow(installed_projects).to receive(:remove_project)
@@ -460,6 +519,7 @@ RSpec.describe "Configurations commands" do
       it "removes files and updates tracking" do
         expect(File).to receive(:delete).at_least(:once)
         expect(installed_projects).to receive(:remove_project).with("my-config")
+        expect(install_registry).to receive(:remove).with("my-config")
         expect(ui).to receive(:success).with(/Uninstalled/)
         cli.uninstall("my-config")
       end
@@ -467,7 +527,8 @@ RSpec.describe "Configurations commands" do
 
     context "when user cancels removal" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, path: "/tmp/test"})
+        allow(cli).to receive(:options).and_return({dry_run: false, global: false, local: false})
+        allow(install_registry).to receive(:path_for).with("my-config").and_return("/tmp/test")
         allow(installed_projects).to receive(:files_for_project).with("my-config").and_return([".claude/settings.json"])
         allow(File).to receive(:exist?).and_return(true)
         allow(ui).to receive(:yes?).and_return(false)
@@ -482,7 +543,7 @@ RSpec.describe "Configurations commands" do
 
     context "when no files found locally" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, path: "/tmp/empty"})
+        allow(cli).to receive(:options).and_return({dry_run: false, global: false, local: false})
         allow(installed_projects).to receive(:files_for_project).with("my-config").and_return([".claude/settings.json"])
         allow(installed_projects).to receive(:has_project?).and_return(false)
         allow(File).to receive(:exist?).and_return(false)
@@ -496,7 +557,7 @@ RSpec.describe "Configurations commands" do
 
     context "when no configuration specified and none installed" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, path: "."})
+        allow(cli).to receive(:options).and_return({dry_run: false, global: false, local: false})
         allow(installed_projects).to receive(:empty?).and_return(true)
       end
 
@@ -508,7 +569,7 @@ RSpec.describe "Configurations commands" do
 
     context "when no configuration specified and one installed" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, path: "/tmp/test"})
+        allow(cli).to receive(:options).and_return({dry_run: false, global: false, local: false})
         allow(installed_projects).to receive(:empty?).and_return(false)
         allow(installed_projects).to receive(:project_count).and_return(1)
         allow(installed_projects).to receive(:project_slugs).and_return(["my-config"])
@@ -530,7 +591,7 @@ RSpec.describe "Configurations commands" do
 
     context "when no configuration specified and multiple installed" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, path: "/tmp/test"})
+        allow(cli).to receive(:options).and_return({dry_run: false, global: false, local: false})
         allow(installed_projects).to receive(:empty?).and_return(false)
         allow(installed_projects).to receive(:project_count).and_return(2)
         allow(installed_projects).to receive(:project_slugs).and_return(["config-1", "config-2"])
@@ -547,7 +608,7 @@ RSpec.describe "Configurations commands" do
 
     context "when configuration not found in tracking and remote" do
       before do
-        allow(cli).to receive(:options).and_return({dry_run: false, path: "."})
+        allow(cli).to receive(:options).and_return({dry_run: false, global: false, local: false})
         allow(installed_projects).to receive(:files_for_project).with("nonexistent").and_return([])
         allow(api).to receive(:get_tree).with("nonexistent").and_raise(Shai::NotFoundError, "Not found")
       end
@@ -555,6 +616,55 @@ RSpec.describe "Configurations commands" do
       it "displays error message" do
         expect(ui).to receive(:error).with(/not found/)
         expect { cli.uninstall("nonexistent") }.to raise_error(SystemExit)
+      end
+    end
+
+    context "with --global flag" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, global: true, local: false})
+        allow(installed_projects).to receive(:files_for_project).with("my-config").and_return([".claude/settings.json"])
+        allow(installed_projects).to receive(:has_project?).and_return(true)
+        allow(installed_projects).to receive(:remove_project)
+        allow(installed_projects).to receive(:empty?).and_return(true)
+        allow(installed_projects).to receive(:delete!)
+        allow(installed_projects).to receive(:project_count).and_return(0)
+        allow(File).to receive(:exist?).and_return(true)
+        allow(File).to receive(:delete)
+        allow(Dir).to receive(:exist?).and_return(true)
+        allow(Dir).to receive(:empty?).and_return(true)
+        allow(Dir).to receive(:rmdir)
+        allow(ui).to receive(:yes?).and_return(true)
+      end
+
+      it "uninstalls from home directory" do
+        expect(Shai::InstalledProjects).to receive(:new).with(File.expand_path(Dir.home)).and_return(installed_projects)
+        expect(ui).to receive(:success).with(/Uninstalled/)
+        cli.uninstall("my-config")
+      end
+    end
+
+    context "with registry lookup" do
+      before do
+        allow(cli).to receive(:options).and_return({dry_run: false, global: false, local: false})
+        allow(install_registry).to receive(:path_for).with("my-config").and_return("/projects/my-app")
+        allow(installed_projects).to receive(:files_for_project).with("my-config").and_return([".claude/settings.json"])
+        allow(installed_projects).to receive(:has_project?).and_return(true)
+        allow(installed_projects).to receive(:remove_project)
+        allow(installed_projects).to receive(:empty?).and_return(true)
+        allow(installed_projects).to receive(:delete!)
+        allow(installed_projects).to receive(:project_count).and_return(0)
+        allow(File).to receive(:exist?).and_return(true)
+        allow(File).to receive(:delete)
+        allow(Dir).to receive(:exist?).and_return(true)
+        allow(Dir).to receive(:empty?).and_return(true)
+        allow(Dir).to receive(:rmdir)
+        allow(ui).to receive(:yes?).and_return(true)
+      end
+
+      it "resolves path from registry" do
+        expect(Shai::InstalledProjects).to receive(:new).with("/projects/my-app").and_return(installed_projects)
+        expect(ui).to receive(:success).with(/Uninstalled/)
+        cli.uninstall("my-config")
       end
     end
   end

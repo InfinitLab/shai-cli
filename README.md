@@ -56,8 +56,8 @@ shai login
 # Search for public configurations
 shai search "claude code"
 
-# Install a configuration to your project
-shai install anthropic/claude-expert
+# Install a configuration (--global for ~/, --local for ./)
+shai install anthropic/claude-expert --local
 
 # Create and share your own configuration
 shai init
@@ -76,12 +76,12 @@ These commands work without authentication for public configurations:
 | ------------------------- | ------------------------------------------------------ |
 | `shai search <query>`     | Search public configurations                           |
 | `shai install <config>`   | Install a public configuration (use `owner/slug` format) |
-| `shai uninstall <config>` | Uninstall a public configuration                       |
+| `shai uninstall <config>` | Uninstall a configuration                                |
 
 ```bash
 # No login needed for public configs
 shai search "claude code"
-shai install anthropic/claude-expert
+shai install anthropic/claude-expert --local
 shai uninstall anthropic/claude-expert
 ```
 
@@ -151,15 +151,41 @@ Token expires: March 11, 2026
 
 ### Using Configurations
 
-| Command                   | Description                              |
-| ------------------------- | ---------------------------------------- |
-| `shai install <config>`   | Install a configuration to local project |
-| `shai uninstall <config>` | Remove an installed configuration        |
+| Command                                | Description                              |
+| -------------------------------------- | ---------------------------------------- |
+| `shai install <config>`                | Install a configuration (prompts for location) |
+| `shai install <config> --global`       | Install to home directory (`~/`)         |
+| `shai install <config> --local`        | Install to current directory (`./`)      |
+| `shai install <config> --path <dir>`   | Install to a specific directory          |
+| `shai uninstall <config>`              | Remove an installed configuration        |
+| `shai uninstall <config> --global`     | Uninstall from home directory            |
+| `shai uninstall <config> --local`      | Uninstall from current directory         |
+
+**Global vs Local installs:**
+
+Configurations can be installed globally (to `~/`) or locally (to `./`). Global installs apply across all projects — useful for AI agent config files like `CLAUDE.md` or `.cursorrules`. Local installs are project-specific.
+
+```bash
+# Install globally (applies everywhere)
+$ shai install anthropic/claude-expert --global
+
+# Install locally (current project only)
+$ shai install anthropic/claude-expert --local
+
+# If you don't specify, shai will ask
+$ shai install anthropic/claude-expert
+? Where do you want to install?
+  ./ (local - current directory)
+  ~/ (global - home directory)
+```
+
+**Uninstalling:**
+
+shai tracks where each configuration was installed, so uninstall works without needing to remember the path:
 
 ```bash
 $ shai uninstall anthropic/claude-expert
-[✔] Fetching anthropic/claude-expert...
-Remove 3 files and 1 folder from 'anthropic/claude-expert'? (y/N) y
+Remove 3 files from 'anthropic/claude-expert'? (y/N) y
 
 ✓ Uninstalled anthropic/claude-expert
 ```
@@ -218,6 +244,12 @@ exclude:
 ## Examples
 
 ```bash
+# Install globally (to ~/)
+shai install anthropic/claude-expert --global
+
+# Install locally (to ./)
+shai install anthropic/claude-expert --local
+
 # Install to a specific directory
 shai install anthropic/claude-expert --path ./my-project
 
@@ -226,6 +258,9 @@ shai install anthropic/claude-expert --dry-run
 
 # Force overwrite existing files
 shai install anthropic/claude-expert --force
+
+# Uninstall (auto-detects where it was installed)
+shai uninstall anthropic/claude-expert
 ```
 
 ---

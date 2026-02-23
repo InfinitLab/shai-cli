@@ -71,15 +71,29 @@ module Shai
             end
           end
 
-          desc "install CONFIGURATION", "Install a configuration to local project"
+          desc "install CONFIGURATION", "Install a configuration"
           option :force, type: :boolean, aliases: "-f", default: false, desc: "Overwrite existing files"
           option :dry_run, type: :boolean, default: false, desc: "Show what would be installed"
-          option :path, type: :string, default: ".", desc: "Install to specific directory"
+          option :path, type: :string, desc: "Install to specific directory"
+          option :global, type: :boolean, default: false, desc: "Install to home directory (~)"
+          option :local, type: :boolean, default: false, desc: "Install to current directory (./)"
           def install(configuration)
             owner, slug = parse_configuration_name(configuration)
             display_name = owner ? "#{owner}/#{slug}" : slug
-            base_path = File.expand_path(options[:path])
+            base_path = resolve_install_path
             shairc_path = File.join(base_path, ".shairc")
+
+            registry = InstallRegistry.new
+
+            # Check if already installed elsewhere
+            if registry.has?(display_name) && !options[:force]
+              existing_path = registry.path_for(display_name)
+              if File.expand_path(existing_path) != base_path
+                ui.error("'#{display_name}' is already installed at #{existing_path}")
+                ui.info("Run `shai uninstall #{display_name}` first, or use --force to reinstall.")
+                exit EXIT_INVALID_INPUT
+              end
+            end
 
             installed = InstalledProjects.new(base_path)
 
@@ -214,6 +228,7 @@ module Shai
 
               # Track the installed project
               installed.add_project(display_name, created_files)
+              registry.add(display_name, base_path)
 
               # Record the install for analytics (fire and forget)
               begin
@@ -301,17 +316,21 @@ module Shai
             end
           end
 
-          desc "uninstall [CONFIGURATION]", "Remove an installed configuration from local project"
+          desc "uninstall [CONFIGURATION]", "Remove an installed configuration"
           option :dry_run, type: :boolean, default: false, desc: "Show what would be removed"
-          option :path, type: :string, default: ".", desc: "Path where configuration is installed"
+          option :global, type: :boolean, default: false, desc: "Uninstall from home directory (~)"
+          option :local, type: :boolean, default: false, desc: "Uninstall from current directory (./)"
           def uninstall(configuration = nil)
-            base_path = File.expand_path(options[:path])
+            registry = InstallRegistry.new
+
+            # Resolve base_path: explicit flag, registry lookup, or fallback to "."
+            base_path = resolve_uninstall_path(configuration, registry)
             installed = InstalledProjects.new(base_path)
 
             # If no configuration specified, determine which to uninstall
             if configuration.nil?
               if installed.empty?
-                ui.error("No configurations installed in this directory.")
+                ui.error("No configurations installed in #{base_path}")
                 ui.info("Usage: shai uninstall <configuration>")
                 exit EXIT_INVALID_INPUT
               elsif installed.project_count == 1
@@ -420,6 +439,7 @@ module Shai
 
             # Update tracking
             installed.remove_project(display_name)
+            registry.remove(display_name)
 
             # Remove tracking file if no more projects
             if installed.empty?
@@ -438,6 +458,56 @@ module Shai
       end
 
       private
+
+      def resolve_uninstall_path(configuration, registry)
+        if options[:global] && options[:local]
+          ui.error("Conflicting options: use only one of --global or --local.")
+          exit EXIT_INVALID_INPUT
+        end
+
+        if options[:global]
+          return File.expand_path(Dir.home)
+        elsif options[:local]
+          return File.expand_path(".")
+        end
+
+        # Try registry lookup if a configuration name is given
+        if configuration
+          owner, slug = parse_configuration_name(configuration)
+          display_name = owner ? "#{owner}/#{slug}" : slug
+          registered_path = registry.path_for(display_name)
+          return File.expand_path(registered_path) if registered_path
+        end
+
+        # Default to current directory
+        File.expand_path(".")
+      end
+
+      def resolve_install_path
+        flag_count = 0
+        flag_count += 1 if options[:global]
+        flag_count += 1 if options[:local]
+        flag_count += 1 if options[:path]
+
+        if flag_count > 1
+          ui.error("Conflicting options: use only one of --global, --local, or --path.")
+          exit EXIT_INVALID_INPUT
+        end
+
+        if options[:path]
+          File.expand_path(options[:path])
+        elsif options[:global]
+          File.expand_path(Dir.home)
+        elsif options[:local]
+          File.expand_path(".")
+        else
+          choice = ui.select("Where do you want to install?", [
+            {name: "./ (local - current directory)", value: :local},
+            {name: "~/ (global - home directory)", value: :global}
+          ])
+          choice == :global ? File.expand_path(Dir.home) : File.expand_path(".")
+        end
+      end
 
       def parse_configuration_name(name)
         if name.include?("/")
